@@ -485,6 +485,9 @@
         DB.clearAll(); state.trades = []; refreshAll(); toast('Dati cancellati.');
       }
     });
+    document.getElementById('btn-review-mapping').addEventListener('click', () => {
+      if (state.pendingImport) openMappingModal();
+    });
   }
 
   async function handleFile(file) {
@@ -495,7 +498,16 @@
       const savedMapping = DB.getMappingTemplate(sig);
       const mapping = savedMapping || P.guessMapping(headers);
       state.pendingImport = { headers, rows, mapping, sig };
-      openMappingModal();
+      document.getElementById('btn-review-mapping').style.display = 'inline-flex';
+      // Zero-click import: if the only required field (Data) was recognized
+      // automatically, skip the confirmation dialog entirely and analyze
+      // right away. The mapping modal only steps in when something essential
+      // couldn't be guessed, or when reopened manually to fix a field.
+      if (mapping.date) {
+        runImport(mapping);
+      } else {
+        openMappingModal();
+      }
     } catch (err) {
       toast(`Errore lettura file: ${err.message}`);
     }
@@ -525,27 +537,29 @@
       if (sel && mapping[def.key]) sel.value = mapping[def.key];
     });
     document.getElementById('btn-cancel-import').onclick = () => { state.pendingImport = null; closeModal(); };
-    document.getElementById('btn-confirm-import').onclick = confirmImport;
+    document.getElementById('btn-confirm-import').onclick = () => {
+      const mapping = {};
+      document.querySelectorAll('#mapping-rows select[data-field]').forEach((sel) => {
+        mapping[sel.dataset.field] = sel.value || null;
+      });
+      runImport(mapping, { closeAfter: true });
+    };
     openModal();
   }
 
-  function confirmImport() {
-    const { rows, sig } = state.pendingImport;
-    const mapping = {};
-    document.querySelectorAll('#mapping-rows select[data-field]').forEach((sel) => {
-      mapping[sel.dataset.field] = sel.value || null;
-    });
-    if (!mapping.date) { toast('Devi indicare almeno la colonna Data.'); return; }
-    const normalized = P.normalizeRows(rows, mapping);
+  function runImport(mapping, opts) {
+    const pending = state.pendingImport;
+    if (!pending) return;
+    if (!mapping.date) { toast('Devi indicare almeno la colonna Data.'); if (!opts || !opts.closeAfter) openMappingModal(); return; }
+    const normalized = P.normalizeRows(pending.rows, mapping);
     if (!normalized.length) { toast('Nessuna riga valida trovata (controlla il formato della data).'); return; }
-    DB.saveMappingTemplate(sig, mapping);
+    DB.saveMappingTemplate(pending.sig, mapping);
     state.trades = DB.addTrades(normalized);
-    state.pendingImport = null;
     const latest = latestTradeDate(state.trades);
     if (latest) { const d = new Date(latest + 'T00:00:00'); state.calYear = d.getFullYear(); state.calMonth = d.getMonth(); }
-    closeModal();
+    if (opts && opts.closeAfter) closeModal();
     refreshAll();
-    toast(`Importati ${normalized.length} trade.`);
+    toast(`Importati ${normalized.length} trade — analisi pronta.`);
     switchTab('dashboard');
   }
 
