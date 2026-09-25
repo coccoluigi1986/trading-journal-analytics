@@ -253,6 +253,25 @@
     return Number.isFinite(n) ? n : undefined;
   }
 
+  // R:R is often written as a ratio ("1:3", "1/2.5") rather than a single
+  // multiple. toNumber() alone would read only the leading "1" via
+  // parseFloat and silently discard the rest, flattening every trade's
+  // R:R to the same wrong value. Detect that shape first and convert it
+  // to the actual multiple (reward ÷ risk) before falling back to a
+  // plain number.
+  function toRR(v) {
+    if (v === '' || v === null || v === undefined) return undefined;
+    if (typeof v === 'number') return v;
+    const s = String(v).trim();
+    const ratio = /^(-?\d+(?:[.,]\d+)?)\s*[:\/]\s*(-?\d+(?:[.,]\d+)?)$/.exec(s);
+    if (ratio) {
+      const risk = toNumber(ratio[1]);
+      const reward = toNumber(ratio[2]);
+      if (risk !== undefined && reward !== undefined && risk !== 0) return reward / risk;
+    }
+    return toNumber(s);
+  }
+
   function toDateIso(v) {
     if (!v) return undefined;
     if (v instanceof Date) {
@@ -341,8 +360,8 @@
       outcome: toOutcome(get('outcome'), resultPercent),
       resultPercent,
       resultPips: toNumber(get('resultPips')),
-      rrPlanned: toNumber(get('rrPlanned')),
-      rrRealized: toNumber(get('rrRealized')),
+      rrPlanned: toRR(get('rrPlanned')),
+      rrRealized: toRR(get('rrRealized')),
       maePercent: toNumber(get('maePercent')),
       maePips: toNumber(get('maePips')),
       mfePercent: toNumber(get('mfePercent')),
@@ -368,5 +387,5 @@
       .filter((t) => t.date); // date is the only hard requirement
   }
 
-  return { FIELD_DEFS, normalizeHeader, guessMapping, parseDelimited, parseJson, parseWorkbookArrayBuffer, readFile, normalizeRows, toNumber, toDateIso };
+  return { FIELD_DEFS, normalizeHeader, guessMapping, parseDelimited, parseJson, parseWorkbookArrayBuffer, readFile, normalizeRows, toNumber, toRR, toDateIso };
 });
