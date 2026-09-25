@@ -488,28 +488,70 @@
     document.getElementById('btn-review-mapping').addEventListener('click', () => {
       if (state.pendingImport) openMappingModal();
     });
+    document.getElementById('btn-import-gsheet').addEventListener('click', handleGoogleSheetImport);
+    document.getElementById('gsheet-url').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleGoogleSheetImport();
+    });
+  }
+
+  function googleSheetCsvUrl(rawUrl) {
+    const url = rawUrl.trim();
+    // Already-published sheet ("Pubblica sul web"): force the CSV variant.
+    const pubMatch = /\/spreadsheets\/d\/e\/([a-zA-Z0-9-_]+)/.exec(url);
+    if (pubMatch) return `https://docs.google.com/spreadsheets/d/e/${pubMatch[1]}/pub?output=csv`;
+    // Regular share link: .../spreadsheets/d/<ID>/edit?gid=<GID>#gid=<GID>
+    const idMatch = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/.exec(url);
+    if (!idMatch) return null;
+    const gidMatch = /[#&?]gid=(\d+)/.exec(url);
+    const gid = gidMatch ? gidMatch[1] : '0';
+    return `https://docs.google.com/spreadsheets/d/${idMatch[1]}/export?format=csv&gid=${gid}`;
+  }
+
+  async function handleGoogleSheetImport() {
+    const input = document.getElementById('gsheet-url');
+    const raw = input.value.trim();
+    if (!raw) { toast('Incolla prima il link del foglio Google.'); return; }
+    const csvUrl = googleSheetCsvUrl(raw);
+    if (!csvUrl) { toast('Link Google Sheets non riconosciuto: verifica di aver copiato l\'URL completo.'); return; }
+    toast('Recupero il foglio da Google…');
+    try {
+      const res = await fetch(csvUrl, { credentials: 'omit' });
+      const text = await res.text();
+      if (!res.ok || /^\s*<(!doctype|html)/i.test(text)) {
+        toast('Google ha rifiutato la lettura: il foglio deve essere condiviso come "Chiunque abbia il link" (Visualizzatore), oppure pubblicato sul web.');
+        return;
+      }
+      const { headers, rows } = P.parseDelimited(text);
+      handleParsed(headers, rows);
+    } catch (err) {
+      toast('Impossibile raggiungere Google Sheets da qui (blocco di rete o CORS). Come alternativa: File → Scarica → CSV/Excel, poi carica il file qui sopra.');
+    }
   }
 
   async function handleFile(file) {
     try {
       const { headers, rows } = await P.readFile(file);
-      if (!rows.length) { toast('Il file non contiene righe leggibili.'); return; }
-      const sig = DB.headerSignature(headers);
-      const savedMapping = DB.getMappingTemplate(sig);
-      const mapping = savedMapping || P.guessMapping(headers);
-      state.pendingImport = { headers, rows, mapping, sig };
-      document.getElementById('btn-review-mapping').style.display = 'inline-flex';
-      // Zero-click import: if the only required field (Data) was recognized
-      // automatically, skip the confirmation dialog entirely and analyze
-      // right away. The mapping modal only steps in when something essential
-      // couldn't be guessed, or when reopened manually to fix a field.
-      if (mapping.date) {
-        runImport(mapping);
-      } else {
-        openMappingModal();
-      }
+      handleParsed(headers, rows);
     } catch (err) {
       toast(`Errore lettura file: ${err.message}`);
+    }
+  }
+
+  function handleParsed(headers, rows) {
+    if (!rows.length) { toast('Il file non contiene righe leggibili.'); return; }
+    const sig = DB.headerSignature(headers);
+    const savedMapping = DB.getMappingTemplate(sig);
+    const mapping = savedMapping || P.guessMapping(headers);
+    state.pendingImport = { headers, rows, mapping, sig };
+    document.getElementById('btn-review-mapping').style.display = 'inline-flex';
+    // Zero-click import: if the only required field (Data) was recognized
+    // automatically, skip the confirmation dialog entirely and analyze
+    // right away. The mapping modal only steps in when something essential
+    // couldn't be guessed, or when reopened manually to fix a field.
+    if (mapping.date) {
+      runImport(mapping);
+    } else {
+      openMappingModal();
     }
   }
 

@@ -53,6 +53,14 @@
       <button class="btn btn-sm" id="btn-review-mapping" style="margin-top:6px;display:none;">Rivedi associazione colonne dell'ultimo file</button>
     </div>
     <div class="card">
+      <div class="card-title">📊 Importa da Google Sheets</div>
+      <div class="card-subtitle">Incolla il link di condivisione del tuo foglio. Il foglio deve essere condiviso come "Chiunque abbia il link" (almeno Visualizzatore), altrimenti Google non lo lascia leggere da qui.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <input type="text" id="gsheet-url" placeholder="https://docs.google.com/spreadsheets/d/…" style="flex:1;min-width:220px;">
+        <button class="btn btn-primary" id="btn-import-gsheet">Importa</button>
+      </div>
+    </div>
+    <div class="card">
       <div class="card-title">🧾 Non hai ancora un formato?</div>
       <div class="card-subtitle">Scarica un modello con tutte le colonne riconosciute (incluse MAE/MFE, confluenze, stato mentale) e compilalo mano a mano che chiudi i trade.</div>
       <button class="btn" id="btn-download-template">Scarica modello CSV</button>
