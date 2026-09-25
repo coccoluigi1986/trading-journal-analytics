@@ -154,16 +154,46 @@
   }
 
   // ---- XLSX parsing (requires global SheetJS `XLSX`) -----------------------
+  const ALL_SYNONYMS = new Set(FIELD_DEFS.flatMap((d) => d.synonyms));
+
+  // Picks the row most likely to be the real header row, scanning the first
+  // few rows instead of blindly trusting row 1 — many trading journals have
+  // a title/logo row (or a blank spacer) above the actual table header.
+  function bestHeaderRowIndex(aoa) {
+    let bestIdx = 0, bestScore = -1;
+    const scanLimit = Math.min(aoa.length, 10);
+    for (let i = 0; i < scanLimit; i++) {
+      const row = aoa[i] || [];
+      const nonEmpty = row.filter((c) => String(c || '').trim() !== '').length;
+      if (nonEmpty < 2) continue;
+      const score = row.filter((c) => ALL_SYNONYMS.has(normalizeHeader(c))).length;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    return bestScore > 0 ? bestIdx : 0;
+  }
+
   function parseWorkbookArrayBuffer(buffer) {
     if (typeof XLSX === 'undefined') {
       throw new Error('Libreria XLSX non caricata: impossibile leggere file Excel.');
     }
-    const wb = XLSX.read(buffer, { type: 'array' });
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-    if (!json.length) return { headers: [], rows: [] };
-    const headers = Object.keys(json[0]);
-    return { headers, rows: json };
+    // raw:false reads each cell's DISPLAYED text (e.g. "3,7%", "06/08/2026")
+    // instead of Excel's underlying stored value (a percent-formatted cell
+    // is stored internally as a fraction like 0.037, which would otherwise
+    // silently shrink every result by 100x).
+    const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+    if (!aoa.length) return { headers: [], rows: [] };
+    const headerIdx = bestHeaderRowIndex(aoa);
+    const headers = aoa[headerIdx].map((h) => String(h || '').trim());
+    const rows = aoa.slice(headerIdx + 1)
+      .filter((r) => r.some((c) => String(c || '').trim() !== ''))
+      .map((r) => {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = r[i] !== undefined && r[i] !== null ? r[i] : ''; });
+        return obj;
+      });
+    return { headers, rows };
   }
 
   function readFile(file) {

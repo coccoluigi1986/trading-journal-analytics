@@ -559,7 +559,12 @@
     if (latest) { const d = new Date(latest + 'T00:00:00'); state.calYear = d.getFullYear(); state.calMonth = d.getMonth(); }
     if (opts && opts.closeAfter) closeModal();
     refreshAll();
-    toast(`Importati ${normalized.length} trade — analisi pronta.`);
+    const blank = normalized.every((t) => t.resultPercent === undefined && t.resultPips === undefined && !t.outcome);
+    if (blank) {
+      toast(`Importati ${normalized.length} trade, ma il risultato di ogni trade risulta vuoto: apri "Rivedi associazione colonne" e controlla il campo Esito/Risultato %.`);
+    } else {
+      toast(`Importati ${normalized.length} trade — analisi pronta.`);
+    }
     switchTab('dashboard');
   }
 
