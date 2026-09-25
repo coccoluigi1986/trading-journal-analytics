@@ -79,7 +79,7 @@
         ${kpiTile('Win rate', fmtPct(k.winRate).replace('+', ''), k.winRate >= 50 ? 'pos' : 'neg')}
         ${kpiTile('Profit factor', Number.isFinite(k.profitFactor) ? k.profitFactor.toFixed(2) : '∞', k.profitFactor >= 1 ? 'pos' : 'neg')}
         ${kpiTile('Aspettativa media', fmtPct(k.expectancy), k.expectancy >= 0 ? 'pos' : 'neg')}
-        ${kpiTile('R:R medio', k.avgRR !== null ? k.avgRR.toFixed(2) + 'R' : 'n/d')}
+        ${kpiTile('R:R medio', k.avgRR !== null ? k.avgRR.toFixed(2) + 'R' : 'n/d', '', k.rrOutliersExcluded > 0 ? `${k.rrOutliersExcluded} valore/i anomalo/i escluso/i` : '')}
         ${kpiTile('MAE medio', fmtPct(k.avgMAE))}
         ${kpiTile('MFE medio', fmtPct(k.avgMFE))}
         ${kpiTile('Drawdown massimo', fmtPct(k.maxDrawdown), 'neg')}
@@ -166,8 +166,8 @@
     });
   }
 
-  function kpiTile(label, value, cls) {
-    return `<div class="kpi-tile"><div class="kpi-label">${esc(label)}</div><div class="kpi-value ${cls || ''}">${esc(value)}</div></div>`;
+  function kpiTile(label, value, cls, sub) {
+    return `<div class="kpi-tile"><div class="kpi-label">${esc(label)}</div><div class="kpi-value ${cls || ''}">${esc(value)}</div>${sub ? `<div class="kpi-sub">${esc(sub)}</div>` : ''}</div>`;
   }
 
   function emptyState(msg) {

@@ -123,7 +123,14 @@
     const grossLoss = Math.abs(losses.reduce((a, t) => a + Math.min(pnlOf(t), 0), 0));
     const profitFactor = grossLoss > 0 ? grossWin / grossLoss : (grossWin > 0 ? Infinity : 0);
     const expectancy = n ? totalPnL / n : 0;
-    const rrValues = trades.map((t) => num(t.rrRealized, num(t.rrPlanned, NaN))).filter(Number.isFinite);
+    // A realized R-multiple outside roughly ±30R never happens in real
+    // retail trading — a value that extreme is a data-entry typo or a
+    // parsing artifact (e.g. a misread thousands separator), and letting
+    // even one of those into the average would swamp every real trade.
+    const RR_SANE_BOUND = 30;
+    const allRRValues = trades.map((t) => num(t.rrRealized, num(t.rrPlanned, NaN))).filter(Number.isFinite);
+    const rrValues = allRRValues.filter((v) => Math.abs(v) <= RR_SANE_BOUND);
+    const rrOutliersExcluded = allRRValues.length - rrValues.length;
     const avgRR = rrValues.length ? rrValues.reduce((a, b) => a + b, 0) / rrValues.length : null;
     const rrStdDev = rrValues.length > 1 ? stddev(rrValues) : null;
     const pnlReturns = trades.map(pnlOf);
@@ -151,6 +158,7 @@
       profitFactor,
       expectancy,
       avgRR,
+      rrOutliersExcluded,
       rrStdDev,
       sharpeLike,
       avgMAE,

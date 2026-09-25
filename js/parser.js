@@ -236,9 +236,19 @@
     if (typeof v === 'number') return v;
     let s = String(v).trim().replace(/%/g, '').replace(/\s/g, '');
     if (s === '') return undefined;
-    // handle Italian decimal comma only when no dot present
-    if (s.includes(',') && !s.includes('.')) s = s.replace(',', '.');
-    else s = s.replace(/,/g, '');
+    const lastComma = s.lastIndexOf(',');
+    const lastDot = s.lastIndexOf('.');
+    if (lastComma !== -1 && lastDot !== -1) {
+      // Both separators present: whichever comes LAST is the decimal
+      // point, the other is a thousands grouping (e.g. "1.234,56" or
+      // "1,234.56" both mean one thousand two hundred thirty-four point
+      // five six — treating the dot as always-decimal broke on the
+      // former, silently turning "10.370" into 10.37 instead of 10370).
+      if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
+      else s = s.replace(/,/g, '');
+    } else if (lastComma !== -1) {
+      s = s.replace(',', '.');
+    }
     const n = parseFloat(s);
     return Number.isFinite(n) ? n : undefined;
   }
