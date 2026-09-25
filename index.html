@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trade Journal Analytics</title>
+<meta name="description" content="Analisi completa e privata del tuo journal di trading: equity, orari, R:R, MAE/MFE, confluenze, pattern ed errori ricorrenti.">
+<meta name="theme-color" content="#0a0e14">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-icon">📊</div>
+      <div>
+        <div class="brand-title">Trade Journal Analytics</div>
+        <div class="brand-subtitle">Le tue performance di trading, analizzate in locale — nessun dato lascia il browser</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-primary" id="btn-install" style="display:none;">⬇️ Installa app</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="dashboard">📈 Dashboard</button>
+    <button class="tab-btn" data-tab="calendar">🗓️ Calendario</button>
+    <button class="tab-btn" data-tab="insights">💡 Insight</button>
+    <button class="tab-btn" data-tab="trades">📒 Trade</button>
+    <button class="tab-btn" data-tab="upload">⬆️ Carica journal</button>
+  </div>
+
+  <div class="tab-panel active" data-tab="dashboard" id="panel-dashboard"></div>
+  <div class="tab-panel" data-tab="calendar" id="panel-calendar"></div>
+  <div class="tab-panel" data-tab="insights" id="panel-insights"></div>
+  <div class="tab-panel" data-tab="trades" id="panel-trades"></div>
+  <div class="tab-panel" data-tab="upload" id="panel-upload">
+    <div class="card">
+      <div class="card-title">⬆️ Carica il tuo journal</div>
+      <div class="card-subtitle">Supportati: CSV, TSV, XLSX/XLS, JSON — di qualsiasi broker o formato personale. Il file viene letto interamente nel tuo browser: non viene mai caricato su alcun server.</div>
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">📁</div>
+        <div><b>Trascina qui il file</b> oppure clicca per selezionarlo</div>
+        <div class="kpi-sub" style="margin-top:6px;">.csv · .tsv · .xlsx · .xls · .json</div>
+      </div>
+      <input type="file" id="file-input" accept=".csv,.tsv,.txt,.xlsx,.xls,.json" style="display:none;">
+    </div>
+    <div class="card">
+      <div class="card-title">🧾 Non hai ancora un formato?</div>
+      <div class="card-subtitle">Scarica un modello con tutte le colonne riconosciute (incluse MAE/MFE, confluenze, stato mentale) e compilalo mano a mano che chiudi i trade.</div>
+      <button class="btn" id="btn-download-template">Scarica modello CSV</button>
+    </div>
+    <div class="card">
+      <div class="card-title">💾 Backup e dati locali</div>
+      <div class="card-subtitle">Tutti i trade sono salvati solo su questo dispositivo/browser. Esporta un backup regolarmente.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn" id="btn-export-json">Esporta backup (JSON)</button>
+        <button class="btn btn-danger" id="btn-clear-data">Cancella tutti i dati</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<nav class="bottom-nav">
+  <button class="active" data-tab="dashboard"><span class="ic">📈</span>Dashboard</button>
+  <button data-tab="calendar"><span class="ic">🗓️</span>Calendario</button>
+  <button data-tab="insights"><span class="ic">💡</span>Insight</button>
+  <button data-tab="trades"><span class="ic">📒</span>Trade</button>
+  <button data-tab="upload"><span class="ic">⬆️</span>Carica</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-title"><span id="modal-title"></span><button class="close-x" id="modal-close">✕</button></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script src="assets/vendor/chart.umd.min.js"></script>
+<script src="assets/vendor/xlsx.full.min.js"></script>
+<script src="js/metrics.js"></script>
+<script src="js/insights.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/db.js"></script>
+<script src="js/calendar.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
