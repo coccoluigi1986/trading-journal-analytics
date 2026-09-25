@@ -253,6 +253,21 @@
     return Number.isFinite(n) ? n : undefined;
   }
 
+  // Typing a ratio like "1:3,84" into Excel doesn't stay text — Excel
+  // recognizes the colon and silently reinterprets it as a clock time
+  // (1 minute 3.84 seconds, or "1:5" as 1 hour 5 minutes for a whole
+  // number), stored as a real Date at its 1899-12-30 epoch. cellDates
+  // faithfully hands us that Date object, so by the time it gets here the
+  // original ratio's precision is already gone from Excel's own doing —
+  // this recovers it from the time components rather than reporting an
+  // empty/wrong R:R.
+  function recoverRatioFromTimeCell(d) {
+    const h = d.getUTCHours(), m = d.getUTCMinutes(), s = d.getUTCSeconds(), ms = d.getUTCMilliseconds();
+    if (h === 0 && m > 0) return (s + ms / 1000) / m; // "1:3,84" -> 00:01:03.840
+    if (h > 0 && s === 0 && ms === 0) return m / h; // "1:5" -> 01:05:00
+    return undefined;
+  }
+
   // R:R is often written as a ratio ("1:3", "1/2.5") rather than a single
   // multiple. toNumber() alone would read only the leading "1" via
   // parseFloat and silently discard the rest, flattening every trade's
@@ -261,6 +276,7 @@
   // plain number.
   function toRR(v) {
     if (v === '' || v === null || v === undefined) return undefined;
+    if (v instanceof Date) return recoverRatioFromTimeCell(v);
     if (typeof v === 'number') return v;
     const s = String(v).trim();
     const ratio = /^(-?\d+(?:[.,]\d+)?)\s*[:\/]\s*(-?\d+(?:[.,]\d+)?)$/.exec(s);
