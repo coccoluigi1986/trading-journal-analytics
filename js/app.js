@@ -405,7 +405,7 @@
       <td>${fmtPct(M.pnlOf(t))}</td>
       <td>${t.rrRealized ?? t.rrPlanned ?? '—'}</td>
       <td>${(t.confluences || []).map((c) => `<span class="pill pill-muted">${esc(c)}</span>`).join(' ')}</td>
-      <td style="max-width:220px;white-space:normal;">${esc(t.notes || '')} ${t.imageUrl ? `<a href="#" data-img-url="${esc(t.imageUrl)}">🖼️</a>` : ''}</td>
+      <td style="max-width:220px;white-space:normal;">${esc(t.notes || '')} ${t.imageUrlPre ? `<a href="#" data-img-url="${esc(t.imageUrlPre)}" title="Screenshot pre-trade">🖼️PRE</a>` : ''} ${t.imageUrlPost ? `<a href="#" data-img-url="${esc(t.imageUrlPost)}" title="Screenshot post-trade">🖼️POST</a>` : ''} ${!t.imageUrlPre && !t.imageUrlPost && t.imageUrl ? `<a href="#" data-img-url="${esc(t.imageUrl)}">🖼️</a>` : ''}</td>
       <td><button class="btn btn-sm" data-edit-id="${t.id}">✎</button> <button class="btn btn-sm btn-danger" data-del-id="${t.id}">🗑</button></td>
     </tr>`;
   }
@@ -428,7 +428,8 @@
       <label style="margin-top:10px;">Condizione di mercato</label><input type="text" id="f-market" value="${esc(t.marketCondition || '')}">
       <label style="margin-top:10px;">Stato mentale</label><input type="text" id="f-mental" value="${esc(t.mentalState || '')}">
       <label style="margin-top:10px;">Qualità esecuzione (1-5)</label><input type="number" id="f-exec" min="1" max="5" value="${t.executionQuality ?? ''}">
-      <label style="margin-top:10px;">Link screenshot esecuzione</label><input type="text" id="f-img" value="${esc(t.imageUrl || '')}">
+      <label style="margin-top:10px;">Link screenshot PRE-trade</label><input type="text" id="f-img-pre" value="${esc(t.imageUrlPre || '')}">
+      <label style="margin-top:10px;">Link screenshot POST-trade</label><input type="text" id="f-img-post" value="${esc(t.imageUrlPost || '')}">
       <label style="margin-top:10px;">Note</label><textarea id="f-notes" rows="3">${esc(t.notes || '')}</textarea>
       <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px;">
         <button class="btn" id="btn-cancel-edit">Annulla</button>
@@ -444,7 +445,8 @@
         marketCondition: document.getElementById('f-market').value.trim() || undefined,
         mentalState: document.getElementById('f-mental').value.trim() || undefined,
         executionQuality: P.toNumber(document.getElementById('f-exec').value),
-        imageUrl: document.getElementById('f-img').value.trim() || undefined,
+        imageUrlPre: document.getElementById('f-img-pre').value.trim() || undefined,
+        imageUrlPost: document.getElementById('f-img-post').value.trim() || undefined,
         notes: document.getElementById('f-notes').value.trim() || undefined
       };
       state.trades = DB.updateTrade(t.id, patch);
@@ -548,8 +550,8 @@
   }
 
   function downloadTemplate() {
-    const headers = ['Data', 'Ora', 'Simbolo', 'Direzione', 'Esito', 'Risultato %', 'Pips', 'RR Pianificato', 'RR Realizzato', 'MAE %', 'MFE %', 'Sessione', 'Condizione di mercato', 'Stato mentale', 'Confluenze', 'Errori', 'Tipo setup', 'Qualità esecuzione', 'Note', 'Link immagine'];
-    const example = ['06/08/2026', '18:00', 'XAUUSD', 'Long', 'Win', '3,7', '37', '3', '3.7', '-0,3', '4,0', 'Sera', 'Trend', 'Disciplinato', 'Order block, Liquidity sweep', '', 'Continuazione', '4', 'Ottima entrata dopo retest del livello', 'https://...'];
+    const headers = ['Data', 'Ora', 'Simbolo', 'Direzione', 'Esito', 'Risultato %', 'Pips', 'RR Pianificato', 'RR Realizzato', 'MAE %', 'MFE %', 'Sessione', 'Condizione di mercato', 'Stato mentale', 'Confluenze', 'Errori', 'Tipo setup', 'Qualità esecuzione', 'Note', 'Note post operazione', 'Link screenshot PRE-trade', 'Link screenshot POST-trade'];
+    const example = ['06/08/2026', '18:00', 'XAUUSD', 'Long', 'Win', '3,7', '37', '3', '3.7', '-0,3', '4,0', 'Sera', 'Trend', 'Disciplinato', 'Order block, Liquidity sweep', '', 'Continuazione', '4', 'Ottima entrata dopo retest del livello', 'Gestione impeccabile, uscita a target pieno', 'https://...pre.png', 'https://...post.png'];
     const csv = `${headers.join(';')}\n${example.join(';')}\n`;
     downloadTextFile('template-trading-journal.csv', csv);
   }

@@ -16,13 +16,13 @@
   const FIELD_DEFS = [
     { key: 'date', label: 'Data', required: true, synonyms: ['date', 'data', 'giorno', 'datetime', 'dataora'] },
     { key: 'time', label: 'Orario ingresso', synonyms: ['time', 'ora', 'orario', 'entrytime', 'oraingresso'] },
-    { key: 'symbol', label: 'Simbolo', synonyms: ['symbol', 'simbolo', 'strumento', 'asset', 'pair', 'ticker', 'market'] },
+    { key: 'symbol', label: 'Simbolo', synonyms: ['symbol', 'simbolo', 'strumento', 'asset', 'pair', 'ticker', 'market', 'coppia', 'cross', 'coppiacross'] },
     { key: 'direction', label: 'Direzione', synonyms: ['direction', 'direzione', 'side', 'tipo', 'longshort', 'buysell'] },
-    { key: 'outcome', label: 'Esito', synonyms: ['outcome', 'esito', 'result', 'risultatotipo', 'winloss'] },
-    { key: 'resultPercent', label: 'Risultato %', synonyms: ['resultpercent', 'risultato', 'pnl', 'pl', 'profit', 'percent', 'ritorno', 'performance', 'returnpercent'] },
-    { key: 'resultPips', label: 'Risultato (pips)', synonyms: ['pips', 'pip', 'resultpips'] },
+    { key: 'outcome', label: 'Esito', synonyms: ['outcome', 'esito', 'result', 'risultato', 'risultatotipo', 'winloss'] },
+    { key: 'resultPercent', label: 'Risultato %', synonyms: ['resultpercent', 'pnl', 'pl', 'profit', 'percent', 'ritorno', 'performance', 'returnpercent'] },
+    { key: 'resultPips', label: 'Risultato (pips)', synonyms: ['pips', 'pip', 'resultpips'], excludeIfContains: ['tp', 'stop'] },
     { key: 'rrPlanned', label: 'R:R pianificato', synonyms: ['rr', 'riskreward', 'rrplanned', 'rrpianificato'] },
-    { key: 'rrRealized', label: 'R:R realizzato', synonyms: ['rrrealized', 'rrrealizzato', 'rreffettivo'] },
+    { key: 'rrRealized', label: 'R:R realizzato', synonyms: ['rrrealized', 'rrrealizzato', 'rreffettivo', 'rrfinale'] },
     { key: 'maePercent', label: 'MAE %', synonyms: ['mae', 'maepercent', 'escursioneavversa', 'maxadverse'] },
     { key: 'maePips', label: 'MAE (pips)', synonyms: ['maepips'] },
     { key: 'mfePercent', label: 'MFE %', synonyms: ['mfe', 'mfepercent', 'escursionefavorevole', 'maxfavorable'] },
@@ -30,11 +30,14 @@
     { key: 'session', label: 'Sessione', synonyms: ['session', 'sessione', 'fasciaoraria'] },
     { key: 'marketCondition', label: 'Condizione di mercato', synonyms: ['marketcondition', 'condizionemercato', 'condizionidimercato', 'condizionedimercato', 'contesto'] },
     { key: 'mentalState', label: 'Stato mentale', synonyms: ['mentalstate', 'statomentale', 'emozione', 'psicologia', 'mood'] },
-    { key: 'confluences', label: 'Confluenze', synonyms: ['confluences', 'confluenze', 'setup', 'conferme', 'confluence'] },
-    { key: 'mistakes', label: 'Errori', synonyms: ['mistakes', 'errori', 'errore', 'mistake'] },
+    { key: 'confluences', label: 'Confluenze / Pro', synonyms: ['confluences', 'confluenze', 'setup', 'conferme', 'confluence', 'pro'] },
+    { key: 'mistakes', label: 'Errori / Contro', synonyms: ['mistakes', 'errori', 'errore', 'mistake', 'contro'] },
     { key: 'setupType', label: 'Tipo setup', synonyms: ['setuptype', 'tiposetup'] },
     { key: 'executionQuality', label: 'Qualità esecuzione (1-5)', synonyms: ['executionquality', 'qualitaesecuzione', 'votoesecuzione'] },
     { key: 'notes', label: 'Note', synonyms: ['notes', 'note', 'commento', 'commenti', 'comment'] },
+    { key: 'notesPost', label: 'Note post operazione', synonyms: ['notespost', 'notepostoperazione', 'notapostoperazione', 'postoperazione'] },
+    { key: 'imageUrlPre', label: 'Link screenshot PRE-trade', synonyms: ['screenpre', 'imagepre', 'screenshotpre', 'linkscreenpre'] },
+    { key: 'imageUrlPost', label: 'Link screenshot POST-trade', synonyms: ['screenpost', 'imagepost', 'screenshotpost', 'linkscreenpost'] },
     { key: 'imageUrl', label: 'Link immagine / screenshot', synonyms: ['image', 'immagine', 'screenshot', 'linkimmagine', 'chartlink', 'imageurl'] }
   ];
 
@@ -45,13 +48,31 @@
       .replace(/[^a-z0-9]/g, '');
   }
 
+  // Headers like "Risultato" and "Risultato %" normalize to the identical
+  // string once punctuation is stripped, so a plain synonym match can't
+  // tell them apart. A literal '%' in the raw header is a strong, cheap
+  // signal that the column holds the numeric percent result rather than
+  // a categorical outcome label (win/loss/TP/SL) — resolve those columns
+  // first, before the generic synonym passes even run.
+  const RESULT_PERCENT_ROOTS = ['risultato', 'result', 'pnl', 'profit', 'ritorno', 'performance', 'guadagno', 'perdita'];
+
   function guessMapping(headers) {
     const normHeaders = headers.map(normalizeHeader);
     const mapping = {};
     const claimed = new Set();
 
+    // Pass 0: percent-sign disambiguation for resultPercent.
+    for (let i = 0; i < headers.length; i++) {
+      if (/%/.test(headers[i]) && RESULT_PERCENT_ROOTS.some((r) => normHeaders[i].includes(r))) {
+        mapping.resultPercent = headers[i];
+        claimed.add(i);
+        break;
+      }
+    }
+
     // Pass 1: exact normalized-header == synonym matches, claimed first-come.
     for (const def of FIELD_DEFS) {
+      if (mapping[def.key]) continue;
       let bestIdx = -1;
       for (let i = 0; i < normHeaders.length; i++) {
         if (claimed.has(i)) continue;
@@ -69,6 +90,7 @@
       let bestIdx = -1;
       for (let i = 0; i < normHeaders.length; i++) {
         if (claimed.has(i)) continue;
+        if (def.excludeIfContains && def.excludeIfContains.some((x) => normHeaders[i].includes(x))) continue;
         if (def.synonyms.some((s) => s.length >= 4 && normHeaders[i].includes(s))) { bestIdx = i; break; }
       }
       if (bestIdx >= 0) { mapping[def.key] = headers[bestIdx]; claimed.add(bestIdx); }
@@ -243,6 +265,11 @@
       return v === '' ? undefined : v;
     }
     const resultPercent = toNumber(get('resultPercent'));
+    const noteParts = [];
+    if (get('notes')) noteParts.push(String(get('notes')).trim());
+    if (get('notesPost')) noteParts.push(`Post: ${String(get('notesPost')).trim()}`);
+    const imageUrlPre = get('imageUrlPre') ? String(get('imageUrlPre')).trim() : undefined;
+    const imageUrlPost = get('imageUrlPost') ? String(get('imageUrlPost')).trim() : undefined;
     const trade = {
       id: `t_${idSeed}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       date: toDateIso(get('date')),
@@ -265,8 +292,10 @@
       mistakes: toList(get('mistakes')),
       setupType: get('setupType') ? String(get('setupType')).trim() : undefined,
       executionQuality: toNumber(get('executionQuality')),
-      notes: get('notes') ? String(get('notes')).trim() : undefined,
-      imageUrl: get('imageUrl') ? String(get('imageUrl')).trim() : undefined
+      notes: noteParts.length ? noteParts.join(' — ') : undefined,
+      imageUrlPre,
+      imageUrlPost,
+      imageUrl: get('imageUrl') ? String(get('imageUrl')).trim() : (imageUrlPost || imageUrlPre)
     };
     return trade;
   }
