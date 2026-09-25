@@ -272,11 +272,25 @@
     const pattern = M.journalPatternReading(trades, 6);
     const postLoss = M.postLossPerformance(trades);
     const pips = M.pipsStats(trades);
+    const hourly = I.hourlyNarrative(trades);
+    const playbook = I.confluencePlaybook(trades);
 
     el.innerHTML = `
       <div class="card">
         <div class="card-title">🧭 Interpretazione generale</div>
         <p style="line-height:1.6;font-size:14px;">${esc(general)}</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🕐 Analisi oraria — dove operi e dove evitare</div>
+        ${hourly ? `
+          <ul class="simple-list">${hourly.narrative.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
+          ${hourly.toAvoid.length ? `<p class="kpi-sub" style="margin-top:8px;">Fasce da evitare (win rate ≤ 40%): ${hourly.toAvoid.map((h) => `${h.label} (${h.winRate.toFixed(0)}%)`).join(', ')}.</p>` : ''}
+          <div class="table-scroll" style="margin-top:12px;"><table>
+            <thead><tr><th>Fascia oraria</th><th>Trade</th><th>Win rate</th></tr></thead>
+            <tbody>${[...hourly.hours].sort((a, b) => a.key - b.key).map((h) => `<tr><td>${h.label}</td><td>${h.n}</td><td><span class="pill ${h.winRate >= 50 ? 'pill-green' : 'pill-red'}">${h.winRate.toFixed(0)}%</span></td></tr>`).join('')}</tbody>
+          </table></div>
+        ` : '<p class="kpi-sub">Nessun orario disponibile nel journal caricato.</p>'}
       </div>
 
       <div class="card">
@@ -304,6 +318,12 @@
         <div class="card">
           <div class="card-title">🧩 Pattern di confluenza</div>
           <div class="chart-wrap"><canvas id="chart-confluence"></canvas></div>
+          ${playbook.hasData ? `
+            <h4 style="margin:14px 0 8px;font-size:13px;color:var(--green);">✅ Cerca sempre</h4>
+            <ul class="simple-list">${playbook.searchFor.length ? playbook.searchFor.map((s) => `<li class="bullet-pro">${esc(s)}</li>`).join('') : '<li>Nessuna confluenza ancora abbastanza forte da consigliare sempre.</li>'}</ul>
+            <h4 style="margin:14px 0 8px;font-size:13px;color:var(--red);">🚫 Evita sempre</h4>
+            <ul class="simple-list">${playbook.avoid.length ? playbook.avoid.map((s) => `<li class="bullet-con">${esc(s)}</li>`).join('') : '<li>Nessuna confluenza ancora identificata come pericolosa.</li>'}</ul>
+          ` : '<p class="kpi-sub" style="margin-top:10px;">Nessuna confluenza taggata nel journal: aggiungile ai singoli trade nel Registro per attivare questa analisi.</p>'}
         </div>
         <div class="card">
           <div class="card-title">🔁 Errori ricorrenti</div>

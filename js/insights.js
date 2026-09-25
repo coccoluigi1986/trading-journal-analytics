@@ -12,7 +12,7 @@
 })(typeof self !== 'undefined' ? self : this, function (M) {
   'use strict';
 
-  const MIN_N_HOUR = 3;
+  const MIN_N_HOUR = 2;
   const MIN_N_TAG = 2;
   const MIN_N_DAY = 3;
 
@@ -207,6 +207,38 @@
     return { pros, cons };
   }
 
+  // Explicit, narrated hour-by-hour reading: when you trade most, your best
+  // and worst windows, and which ones to actively avoid — not just a chart.
+  function hourlyNarrative(trades) {
+    const hours = M.byHour(trades);
+    if (!hours.length) return null;
+    const eligible = hours.filter((h) => h.n >= MIN_N_HOUR);
+    const mostTraded = [...hours].sort((a, b) => b.n - a.n)[0];
+    const best = eligible.length ? [...eligible].sort((a, b) => b.winRate - a.winRate || b.n - a.n)[0] : null;
+    const worst = eligible.length ? [...eligible].sort((a, b) => a.winRate - b.winRate || b.n - a.n)[0] : null;
+    const toAvoid = eligible.filter((h) => h.winRate <= 40).sort((a, b) => a.winRate - b.winRate);
+
+    const lines = [];
+    lines.push(`Operi più spesso nella fascia ${mostTraded.label} (${mostTraded.n} trade su ${trades.length} totali).`);
+    if (best) lines.push(`La fascia più redditizia è ${best.label}: ${pct(best.winRate)} win rate su ${best.n} trade.`);
+    if (worst && (!best || worst.label !== best.label)) {
+      lines.push(`La fascia più debole è ${worst.label}: ${pct(worst.winRate)} win rate su ${worst.n} trade${worst.winRate <= 40 ? ' — valuta di evitarla' : ''}.`);
+    }
+    if (!eligible.length) lines.push('Non hai ancora abbastanza trade per fascia oraria per un giudizio affidabile: continua a registrare l\'orario di ogni trade.');
+
+    return { hours, mostTraded, best, worst, toAvoid, narrative: lines };
+  }
+
+  // Direct "search for / avoid" guidance built from the same confluence
+  // win-rate ranking used elsewhere, phrased as an operating rule rather
+  // than just a ranked list.
+  function confluencePlaybook(trades) {
+    const confl = M.confluenceStats(trades);
+    const searchFor = confl.strong.map((c) => `"${c.tag}" — ${pct(c.winRate)} win rate su ${c.n} trade`);
+    const avoid = confl.dangerous.map((c) => `"${c.tag}" — ${pct(c.winRate)} win rate su ${c.n} trade`);
+    return { searchFor, avoid, hasData: confl.all.length > 0 };
+  }
+
   function watchlist(trades) {
     const k = M.kpis(trades);
     const items = [];
@@ -241,5 +273,5 @@
     return parts.join(' ');
   }
 
-  return { buildRecommendations, buildProsCons, watchlist, generalInterpretation };
+  return { buildRecommendations, buildProsCons, watchlist, generalInterpretation, hourlyNarrative, confluencePlaybook };
 });
