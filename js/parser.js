@@ -178,12 +178,22 @@
     }
     const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    // raw:false reads each cell's DISPLAYED text (e.g. "3,7%", "06/08/2026")
-    // instead of Excel's underlying stored value (a percent-formatted cell
-    // is stored internally as a fraction like 0.037, which would otherwise
-    // silently shrink every result by 100x).
-    const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
-    if (!aoa.length) return { headers: [], rows: [] };
+    // Two parallel reads of the same sheet, merged cell-by-cell:
+    // - raw:true (+ cellDates) gives real JS Date objects for date cells,
+    //   which our date parser handles directly and unambiguously.
+    // - raw:false gives each OTHER cell's DISPLAYED text (e.g. "3,7%")
+    //   instead of Excel's underlying stored value (a percent-formatted
+    //   cell is stored internally as a fraction like 0.037, which would
+    //   otherwise silently shrink every result by 100x).
+    // Relying on only one of the two breaks the other case, so both are
+    // read and the best representation is picked per cell.
+    const aoaRaw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+    const aoaFmt = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+    if (!aoaFmt.length) return { headers: [], rows: [] };
+    const aoa = aoaFmt.map((fmtRow, r) => fmtRow.map((fmtCell, c) => {
+      const rawCell = (aoaRaw[r] || [])[c];
+      return rawCell instanceof Date ? rawCell : fmtCell;
+    }));
     const headerIdx = bestHeaderRowIndex(aoa);
     const headers = aoa[headerIdx].map((h) => String(h || '').trim());
     const rows = aoa.slice(headerIdx + 1)
@@ -235,15 +245,27 @@
 
   function toDateIso(v) {
     if (!v) return undefined;
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (v instanceof Date) {
+      if (Number.isNaN(v.getTime())) return undefined;
+      return v.toISOString().slice(0, 10);
+    }
     const s = String(v).trim();
     let m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
     if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-    m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(s);
+    // DD/MM/YYYY (Italian convention) — any trailing text (e.g. a time
+    // stamp like "06/08/2026 00:00:00") is ignored, not required to match.
+    m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})\b/.exec(s);
     if (m) {
-      // Italian convention: DD/MM/YYYY
       const d = m[1].padStart(2, '0'), mo = m[2].padStart(2, '0');
       return `${m[3]}-${mo}-${d}`;
+    }
+    // 2-digit year variant: DD/MM/YY
+    m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2})\b/.exec(s);
+    if (m) {
+      const d = m[1].padStart(2, '0'), mo = m[2].padStart(2, '0');
+      const yy = parseInt(m[3], 10);
+      const yyyy = yy < 70 ? 2000 + yy : 1900 + yy;
+      return `${yyyy}-${mo}-${d}`;
     }
     const d = new Date(s);
     if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);

@@ -594,7 +594,12 @@
     if (!pending) return;
     if (!mapping.date) { toast('Devi indicare almeno la colonna Data.'); if (!opts || !opts.closeAfter) openMappingModal(); return; }
     const normalized = P.normalizeRows(pending.rows, mapping);
-    if (!normalized.length) { toast('Nessuna riga valida trovata (controlla il formato della data).'); return; }
+    if (!normalized.length) {
+      const sample = pending.rows.slice(0, 3).map((r) => r[mapping.date]).filter((v) => v !== '' && v !== undefined);
+      const hint = sample.length ? ` Esempio di valore letto nella colonna Data: "${sample[0]}".` : ' La colonna Data risulta vuota nelle prime righe.';
+      toast(`Nessuna riga valida trovata: il formato della data non è stato riconosciuto.${hint}`);
+      return;
+    }
     DB.saveMappingTemplate(pending.sig, mapping);
     state.trades = DB.addTrades(normalized);
     const latest = latestTradeDate(state.trades);
