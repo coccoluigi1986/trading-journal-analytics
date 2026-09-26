@@ -7,10 +7,20 @@
   'use strict';
   const registry = new Map();
 
+  // Data labels are opt-in per chart (registered globally, off by default)
+  // so the equity curve — one point per trade, far too dense to label —
+  // stays readable while bar/doughnut charts show their values directly
+  // on the chart itself instead of only on hover.
+  if (typeof ChartDataLabels !== 'undefined') {
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set('plugins.datalabels', { display: false });
+  }
+
   const PALETTE = {
     green: '#22c55e', red: '#ef4444', amber: '#f59e0b', blue: '#3b82f6',
-    purple: '#a78bfa', grid: 'rgba(255,255,255,0.06)', text: '#8b93a7'
+    purple: '#a78bfa', grid: 'rgba(255,255,255,0.06)', text: '#8b93a7', label: '#e7eaf0'
   };
+  const LABEL_FONT = { weight: '700', size: 11 };
 
   const commonScales = {
     x: { grid: { color: PALETTE.grid }, ticks: { color: PALETTE.text, font: { size: 11 } } },
@@ -64,7 +74,12 @@
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => `Win rate ${ctx.parsed.y.toFixed(0)}% (${rows[ctx.dataIndex].n} trade)` } }
+          tooltip: { callbacks: { label: (ctx) => `Win rate ${ctx.parsed.y.toFixed(0)}% (${rows[ctx.dataIndex].n} trade)` } },
+          datalabels: {
+            display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0,
+            anchor: 'end', align: 'top', color: PALETTE.label, font: LABEL_FONT,
+            formatter: (v) => `${v.toFixed(0)}%`
+          }
         },
         scales: { x: commonScales.x, y: { ...commonScales.y, max: 100, ticks: { ...commonScales.y.ticks, callback: (v) => `${v}%` } } }
       }
@@ -86,7 +101,12 @@
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => `Win rate ${ctx.parsed.y.toFixed(0)}% (${rows[ctx.dataIndex].n} trade)` } }
+          tooltip: { callbacks: { label: (ctx) => `Win rate ${ctx.parsed.y.toFixed(0)}% (${rows[ctx.dataIndex].n} trade)` } },
+          datalabels: {
+            display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0,
+            anchor: 'end', align: 'top', color: PALETTE.label, font: LABEL_FONT,
+            formatter: (v) => `${v.toFixed(0)}%`
+          }
         },
         scales: { x: commonScales.x, y: { ...commonScales.y, max: 100, ticks: { ...commonScales.y.ticks, callback: (v) => `${v}%` } } }
       }
@@ -106,7 +126,14 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false, cutout: '68%',
-        plugins: { legend: { position: 'bottom', labels: { color: PALETTE.text, boxWidth: 10, font: { size: 11 } } } }
+        plugins: {
+          legend: { position: 'bottom', labels: { color: PALETTE.text, boxWidth: 10, font: { size: 11 } } },
+          datalabels: {
+            display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0,
+            color: '#0a0e14', font: { weight: '800', size: 12 },
+            formatter: (v) => v
+          }
+        }
       }
     });
   }
@@ -123,7 +150,13 @@
       },
       options: {
         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            display: true, anchor: 'end', align: 'end', color: PALETTE.label, font: LABEL_FONT,
+            formatter: (v) => `${v.toFixed(0)}%`
+          }
+        },
         scales: { x: { ...commonScales.x, max: 100 }, y: commonScales.y }
       }
     });
@@ -145,7 +178,11 @@
         indexAxis: 'y', responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => `Win rate ${ctx.parsed.x.toFixed(0)}% (${sorted[ctx.dataIndex].n} trade)` } }
+          tooltip: { callbacks: { label: (ctx) => `Win rate ${ctx.parsed.x.toFixed(0)}% (${sorted[ctx.dataIndex].n} trade)` } },
+          datalabels: {
+            display: true, anchor: 'end', align: 'end', color: PALETTE.label, font: LABEL_FONT,
+            formatter: (v) => `${v.toFixed(0)}%`
+          }
         },
         scales: { x: { ...commonScales.x, max: 100 }, y: commonScales.y }
       }
@@ -161,11 +198,13 @@
         datasets: [
           {
             type: 'bar', label: 'P&L %', data: rows.map((r) => r.pnl), yAxisID: 'y',
-            backgroundColor: rows.map((r) => (r.pnl >= 0 ? PALETTE.green : PALETTE.red)), borderRadius: 6, order: 2
+            backgroundColor: rows.map((r) => (r.pnl >= 0 ? PALETTE.green : PALETTE.red)), borderRadius: 6, order: 2,
+            datalabels: { display: true, anchor: 'end', align: (ctx) => (ctx.dataset.data[ctx.dataIndex] >= 0 ? 'top' : 'bottom'), color: PALETTE.label, font: LABEL_FONT, formatter: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%` }
           },
           {
             type: 'line', label: 'Win rate %', data: rows.map((r) => r.winRate), yAxisID: 'y1',
-            borderColor: PALETTE.purple, backgroundColor: PALETTE.purple, tension: 0.3, pointRadius: 3, order: 1
+            borderColor: PALETTE.purple, backgroundColor: PALETTE.purple, tension: 0.3, pointRadius: 3, order: 1,
+            datalabels: { display: true, align: 'bottom', color: PALETTE.purple, font: LABEL_FONT, formatter: (v) => `${v.toFixed(0)}%` }
           }
         ]
       },
@@ -190,7 +229,11 @@
       },
       options: {
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y.toFixed(2)}%` } } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y.toFixed(2)}%` } },
+          datalabels: { display: true, anchor: 'end', align: (ctx) => (ctx.dataset.data[ctx.dataIndex] >= 0 ? 'top' : 'bottom'), color: PALETTE.label, font: LABEL_FONT, formatter: (v) => `${v.toFixed(2)}%` }
+        },
         scales: { x: commonScales.x, y: { ...commonScales.y, ticks: { ...commonScales.y.ticks, callback: (v) => `${v}%` } } }
       }
     });

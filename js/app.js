@@ -673,6 +673,16 @@
   });
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    // A new service worker taking over mid-session means this page's own
+    // code is already stale (the app is served network-first, but the
+    // currently running tab was still loaded under the previous worker).
+    // Reload once so the tab is never left running an outdated version.
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
   }
 
   // ---------------------------------------------------------------- init

@@ -2,7 +2,7 @@
    Caches the app shell so the app opens (and can be used on already
    loaded data) even offline, after the first successful load.
 */
-const CACHE_NAME = 'tj-analytics-v1';
+const CACHE_NAME = 'tj-analytics-v2';
 const APP_SHELL = [
   './index.html',
   './manifest.json',
@@ -18,6 +18,7 @@ const APP_SHELL = [
   './assets/icon-192.png',
   './assets/icon-512.png',
   './assets/vendor/chart.umd.min.js',
+  './assets/vendor/chartjs-plugin-datalabels.min.js',
   './assets/vendor/xlsx.full.min.js'
 ];
 
@@ -38,16 +39,17 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
 
+  // Network-first: this app is under active development and a stale
+  // cached copy served ahead of a fresh deploy is worse than a slightly
+  // slower load. Only fall back to the cache when the network is truly
+  // unavailable (offline), which is the one case the cache exists for.
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const fetchPromise = fetch(req).then((networkRes) => {
-        if (networkRes && networkRes.ok) {
-          const clone = networkRes.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
-        }
-        return networkRes;
-      }).catch(() => cached);
-      return cached || fetchPromise;
-    })
+    fetch(req).then((networkRes) => {
+      if (networkRes && networkRes.ok) {
+        const clone = networkRes.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+      }
+      return networkRes;
+    }).catch(() => caches.match(req))
   );
 });

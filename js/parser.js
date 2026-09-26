@@ -319,6 +319,15 @@
 
   function toTime(v) {
     if (!v) return undefined;
+    // A time-formatted Excel cell (unlike the RR ratio case above, this is
+    // exactly what a time column is supposed to be) comes back as a real
+    // Date at the 1899-12-30 epoch — read the hour/minute straight off it
+    // instead of stringifying, which would just produce an unparseable
+    // date string.
+    if (v instanceof Date) {
+      if (Number.isNaN(v.getTime())) return undefined;
+      return `${String(v.getUTCHours()).padStart(2, '0')}:${String(v.getUTCMinutes()).padStart(2, '0')}`;
+    }
     const s = String(v).trim();
     const m = /^(\d{1,2})[:.](\d{2})/.exec(s);
     if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
