@@ -693,7 +693,8 @@
     if (!rows.length) { toast('Il file non contiene righe leggibili.'); return; }
     const sig = DB.headerSignature(headers);
     const savedMapping = DB.getMappingTemplate(sig);
-    const mapping = savedMapping || P.guessMapping(headers);
+    const freshGuess = P.guessMapping(headers);
+    const mapping = savedMapping ? P.mergeMapping(freshGuess, savedMapping) : freshGuess;
     state.pendingImport = { headers, rows, mapping, sig, setupLookup };
     document.getElementById('btn-review-mapping').style.display = 'inline-flex';
     // Zero-click import: if the only required field (Data) was recognized

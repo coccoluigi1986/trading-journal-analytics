@@ -107,6 +107,23 @@
     return mapping;
   }
 
+  // A saved mapping (reused automatically for a file with the same header
+  // signature, so the user isn't asked to re-map every time) can go stale:
+  // it freezes whatever the auto-guess produced on that first import, and
+  // if guessMapping() gets smarter later (a column it used to miss, a bug
+  // fix like the Risultato/Risultato % mix-up) or FIELD_DEFS grows a new
+  // field, every later re-upload would silently keep reusing the old,
+  // worse mapping forever. Re-guess fresh on every import and let the
+  // saved mapping only override fields it actually has an opinion on.
+  function mergeMapping(freshGuess, savedMapping) {
+    const merged = {};
+    for (const def of FIELD_DEFS) {
+      const saved = savedMapping ? savedMapping[def.key] : null;
+      merged[def.key] = saved || freshGuess[def.key] || null;
+    }
+    return merged;
+  }
+
   // ---- Delimited text (CSV/TSV) parsing --------------------------------
   function detectDelimiter(sampleLine) {
     const counts = { ',': (sampleLine.match(/,/g) || []).length, ';': (sampleLine.match(/;/g) || []).length, '\t': (sampleLine.match(/\t/g) || []).length };
@@ -476,5 +493,5 @@
       .filter((t) => t.date); // date is the only hard requirement
   }
 
-  return { FIELD_DEFS, normalizeHeader, guessMapping, parseDelimited, parseJson, parseWorkbookArrayBuffer, readFile, normalizeRows, toNumber, toRR, toDateIso, toCurrency, toOutcomeDetailed };
+  return { FIELD_DEFS, normalizeHeader, guessMapping, mergeMapping, parseDelimited, parseJson, parseWorkbookArrayBuffer, readFile, normalizeRows, toNumber, toRR, toDateIso, toCurrency, toOutcomeDetailed };
 });
