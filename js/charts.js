@@ -239,5 +239,92 @@
     });
   }
 
-  root.TJCharts = { render, equityCurve, weekdayBar, hourBar, winLossDonut, directionBar, confluenceBar, monthlyComparison, maeMfeBar };
+  function outcomeDonut4(canvasId, stats) {
+    return render(canvasId, {
+      type: 'doughnut',
+      data: {
+        labels: ['Target', 'Parziale', 'Breakeven', 'Stop Loss'],
+        datasets: [{
+          data: [stats.target, stats.parziale, stats.be, stats.sl],
+          backgroundColor: [PALETTE.green, '#4ade80', PALETTE.amber, PALETTE.red],
+          borderWidth: 0
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '68%',
+        plugins: {
+          legend: { position: 'bottom', labels: { color: PALETTE.text, boxWidth: 10, font: { size: 11 } } },
+          datalabels: {
+            display: (ctx) => ctx.dataset.data[ctx.dataIndex] > 0,
+            color: '#0a0e14', font: { weight: '800', size: 12 },
+            formatter: (v) => v
+          }
+        }
+      }
+    });
+  }
+
+  function monthlyRBar(canvasId, rows) {
+    return render(canvasId, {
+      type: 'bar',
+      data: {
+        labels: rows.map((r) => r.label),
+        datasets: [{
+          data: rows.map((r) => r.totalR),
+          backgroundColor: rows.map((r) => (r.totalR >= 0 ? PALETTE.green : PALETTE.red)),
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          datalabels: {
+            display: true, anchor: 'end', align: (ctx) => (ctx.dataset.data[ctx.dataIndex] >= 0 ? 'top' : 'bottom'),
+            color: PALETTE.label, font: LABEL_FONT, formatter: (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}R`
+          }
+        },
+        scales: { x: commonScales.x, y: { ...commonScales.y, ticks: { ...commonScales.y.ticks, callback: (v) => `${v}R` } } }
+      }
+    });
+  }
+
+  function categoryBar(canvasId, rows, opts) {
+    opts = opts || {};
+    const valueKey = opts.valueKey || 'winRate';
+    const isPercent = opts.isPercent !== false;
+    const suffix = isPercent ? '%' : 'R';
+    return render(canvasId, {
+      type: 'bar',
+      data: {
+        labels: rows.map((r) => r.label ?? r.key),
+        datasets: [{
+          data: rows.map((r) => r[valueKey] ?? 0),
+          backgroundColor: rows.map((r) => ((r[valueKey] ?? 0) >= (isPercent ? 50 : 0) ? PALETTE.green : PALETTE.red)),
+          borderRadius: 6, maxBarThickness: 40
+        }]
+      },
+      options: {
+        indexAxis: opts.horizontal ? 'y' : 'x',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => `${rows[ctx.dataIndex].n} trade` } },
+          datalabels: {
+            display: true, anchor: 'end', align: opts.horizontal ? 'end' : 'top',
+            color: PALETTE.label, font: LABEL_FONT,
+            formatter: (v) => `${v >= 0 ? (isPercent ? '' : '+') : ''}${v.toFixed(isPercent ? 0 : 2)}${suffix}`
+          }
+        },
+        scales: opts.horizontal
+          ? { x: { ...commonScales.x, max: isPercent ? 100 : undefined }, y: commonScales.y }
+          : { x: commonScales.x, y: { ...commonScales.y, max: isPercent ? 100 : undefined, ticks: { ...commonScales.y.ticks, callback: (v) => `${v}${suffix}` } } }
+      }
+    });
+  }
+
+  root.TJCharts = {
+    render, equityCurve, weekdayBar, hourBar, winLossDonut, directionBar, confluenceBar, monthlyComparison, maeMfeBar,
+    outcomeDonut4, monthlyRBar, categoryBar
+  };
 })(typeof window !== 'undefined' ? window : this);

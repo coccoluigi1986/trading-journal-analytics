@@ -116,6 +116,8 @@
     const losses = trades.filter(isLoss);
     const bes = trades.filter(isBE);
     const winRate = n ? (wins.length / n) * 100 : 0;
+    const decisive = wins.length + losses.length;
+    const winRateExBE = decisive ? (wins.length / decisive) * 100 : 0;
     const totalPnL = trades.reduce((a, t) => a + pnlOf(t), 0);
     const avgWin = wins.length ? wins.reduce((a, t) => a + pnlOf(t), 0) / wins.length : 0;
     const avgLoss = losses.length ? losses.reduce((a, t) => a + pnlOf(t), 0) / losses.length : 0;
@@ -152,6 +154,7 @@
       losses: losses.length,
       breakevens: bes.length,
       winRate,
+      winRateExBE,
       totalPnL,
       avgWin,
       avgLoss,
@@ -429,6 +432,127 @@
     };
   }
 
+  // ---- Four-way outcome taxonomy (Target / Parziale / BE / SL) -----------
+  function outcomeDetailedStats(trades) {
+    const counts = { target: 0, parziale: 0, be: 0, sl: 0, other: 0 };
+    for (const t of trades) {
+      const k = t.outcomeDetailed;
+      if (k && Object.prototype.hasOwnProperty.call(counts, k)) counts[k]++;
+      else counts.other++;
+    }
+    return { ...counts, total: trades.length, parzialePlusBe: counts.parziale + counts.be };
+  }
+
+  // ---- R-multiple totals (uses the dedicated "Risultato in R" field,
+  // distinct from R:R medio which mixes rrPlanned/rrRealized) -------------
+  function rMultipleStats(trades) {
+    const vals = trades.map((t) => t.resultR).filter((v) => typeof v === 'number' && Number.isFinite(v));
+    if (!vals.length) return { n: 0, totalR: null, expectancyR: null };
+    const totalR = vals.reduce((a, b) => a + b, 0);
+    return { n: vals.length, totalR, expectancyR: totalR / vals.length };
+  }
+
+  // ---- Rich per-group breakdown: counts by outcome + R stats, reused for
+  // weekday / session / hour / direction / setup ---------------------------
+  function groupStatsRich(trades, keyFn) {
+    const map = new Map();
+    for (const t of trades) {
+      const key = keyFn(t);
+      if (key === null || key === undefined || key === '') continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(t);
+    }
+    const out = [];
+    for (const [key, list] of map.entries()) {
+      const wins = list.filter(isWin).length;
+      const losses = list.filter(isLoss).length;
+      const pnl = list.reduce((a, t) => a + pnlOf(t), 0);
+      const rVals = list.map((t) => t.resultR).filter((v) => typeof v === 'number' && Number.isFinite(v));
+      const totalR = rVals.length ? rVals.reduce((a, b) => a + b, 0) : null;
+      out.push({
+        key, n: list.length, wins, losses,
+        target: list.filter((t) => t.outcomeDetailed === 'target').length,
+        parziale: list.filter((t) => t.outcomeDetailed === 'parziale').length,
+        be: list.filter((t) => t.outcomeDetailed === 'be').length,
+        sl: list.filter((t) => t.outcomeDetailed === 'sl').length,
+        winRate: list.length ? (wins / list.length) * 100 : 0,
+        pnl, avgPnL: list.length ? pnl / list.length : 0,
+        totalR, expectancyR: rVals.length ? totalR / rVals.length : null, rN: rVals.length
+      });
+    }
+    return out;
+  }
+
+  function byWeekdayDetailed(trades) {
+    const rows = groupStatsRich(trades, (t) => { const wd = weekdayOf(t.date); return wd === null ? null : wd; });
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    return order.map((wd) => {
+      const found = rows.find((r) => r.key === wd);
+      const base = found || { key: wd, n: 0, wins: 0, losses: 0, target: 0, parziale: 0, be: 0, sl: 0, winRate: 0, pnl: 0, avgPnL: 0, totalR: null, expectancyR: null, rN: 0 };
+      return { ...base, label: WEEKDAYS_SHORT_IT[wd], labelFull: WEEKDAYS_IT[wd] };
+    });
+  }
+
+  function bySessionDetailed(trades) {
+    return groupStatsRich(trades, (t) => t.session || null).sort((a, b) => b.n - a.n);
+  }
+
+  function byHourDetailed(trades) {
+    return groupStatsRich(trades, (t) => hourOf(t.time))
+      .sort((a, b) => a.key - b.key)
+      .map((r) => ({ ...r, label: `${String(r.key).padStart(2, '0')}:00` }));
+  }
+
+  function byDirectionDetailed(trades) {
+    return groupStatsRich(trades, (t) => (t.direction ? String(t.direction).toLowerCase() : null));
+  }
+
+  function bySetupDetailed(trades, setupLookup) {
+    return groupStatsRich(trades, (t) => t.setupType || null)
+      .map((r) => ({ ...r, description: (setupLookup && setupLookup[r.key]) || null }))
+      .sort((a, b) => b.n - a.n);
+  }
+
+  // ---- "Statistically ideal trade" — best-performing value per category,
+  // only among categories with enough trades (minN) to be meaningful -------
+  function idealProfile(trades, minN, setupLookup) {
+    const MIN_N = minN || 5;
+    function bestOf(rows, labelFn) {
+      const eligible = rows.filter((r) => r.n >= MIN_N);
+      if (!eligible.length) return null;
+      const best = [...eligible].sort((a, b) => {
+        if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+        return (b.expectancyR ?? -Infinity) - (a.expectancyR ?? -Infinity);
+      })[0];
+      return { ...best, label: labelFn(best) };
+    }
+    return {
+      minN: MIN_N,
+      day: bestOf(byWeekdayDetailed(trades), (r) => r.labelFull),
+      session: bestOf(bySessionDetailed(trades), (r) => r.key),
+      hour: bestOf(byHourDetailed(trades), (r) => r.label),
+      direction: bestOf(byDirectionDetailed(trades), (r) => (r.key === 'long' ? 'Long' : 'Short')),
+      setup: bestOf(bySetupDetailed(trades, setupLookup), (r) => r.description || r.key)
+    };
+  }
+
+  // ---- Qualitative causes behind Stop Loss / Breakeven trades -----------
+  function qualitativeCauses(trades, outcomeKey) {
+    const subset = trades.filter((t) => t.outcomeDetailed === outcomeKey);
+    const mistakes = explodeTagStats(subset, 'mistakes').sort((a, b) => b.n - a.n).slice(0, 8);
+    const wordFreq = new Map();
+    for (const t of subset) {
+      if (!t.notes) continue;
+      for (const w of tokenize(t.notes)) wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
+    }
+    const words = [...wordFreq.entries()]
+      .filter(([, c]) => c >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([word, count]) => ({ word, count }));
+    return { n: subset.length, mistakes, words };
+  }
+
   return {
     WEEKDAYS_IT, WEEKDAYS_SHORT_IT,
     sortByDateTime, pnlOf, isWin, isLoss, isBE, weekdayOf, hourOf,
@@ -439,6 +563,9 @@
     postLossPerformance, performanceByDailyTradeCount,
     pipsStats, maeMfeEfficiency,
     calendarMonth, bestWorstDays,
-    journalPatternReading
+    journalPatternReading,
+    outcomeDetailedStats, rMultipleStats,
+    byWeekdayDetailed, bySessionDetailed, byHourDetailed, byDirectionDetailed, bySetupDetailed,
+    idealProfile, qualitativeCauses
   };
 });

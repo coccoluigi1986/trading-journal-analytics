@@ -11,6 +11,7 @@
     calYear: new Date().getFullYear(),
     calMonth: new Date().getMonth(),
     showWeekend: DB.getSettings().weekendVisible,
+    setupLookup: DB.getSettings().setupLookup || null,
     pendingImport: null, // { headers, rows, mapping }
     tradeFilter: '',
     editingTradeId: null
@@ -72,21 +73,37 @@
     if (!trades.length) { el.innerHTML = emptyState('Carica il tuo journal per vedere qui la dashboard completa.'); return; }
     const k = M.kpis(trades);
     const pips = M.pipsStats(trades);
+    const oc = M.outcomeDetailedStats(trades);
+    const rStats = M.rMultipleStats(trades);
+    const hasDetailed = (oc.target + oc.parziale + oc.be + oc.sl) > 0;
+    const sessionRows = M.bySessionDetailed(trades);
+    const weekdayRows = M.byWeekdayDetailed(trades);
+    const dirRowsD = M.byDirectionDetailed(trades);
 
     el.innerHTML = `
       <div class="grid grid-4">
         ${kpiTile('Trade totali', k.totalTrades)}
         ${kpiTile('Win rate', fmtPct(k.winRate).replace('+', ''), k.winRate >= 50 ? 'pos' : 'neg')}
+        ${kpiTile('Win rate (escl. BE)', fmtPct(k.winRateExBE).replace('+', ''), k.winRateExBE >= 50 ? 'pos' : 'neg')}
         ${kpiTile('Profit factor', Number.isFinite(k.profitFactor) ? k.profitFactor.toFixed(2) : '∞', k.profitFactor >= 1 ? 'pos' : 'neg')}
-        ${kpiTile('Aspettativa media', fmtPct(k.expectancy), k.expectancy >= 0 ? 'pos' : 'neg')}
+      </div>
+      <div class="grid grid-4">
+        ${kpiTile('Target (TP)', oc.target, 'pos')}
+        ${kpiTile('Parziale', oc.parziale)}
+        ${kpiTile('Breakeven (BE)', oc.be)}
+        ${kpiTile('Stop Loss (SL)', oc.sl, oc.sl ? 'neg' : '')}
+      </div>
+      <div class="grid grid-4">
+        ${kpiTile('R Totali', rStats.totalR !== null ? `${rStats.totalR >= 0 ? '+' : ''}${rStats.totalR.toFixed(2)}R` : 'n/d', rStats.totalR >= 0 ? 'pos' : 'neg')}
+        ${kpiTile('Expectancy (R/trade)', rStats.expectancyR !== null ? `${rStats.expectancyR >= 0 ? '+' : ''}${rStats.expectancyR.toFixed(2)}R` : 'n/d', rStats.expectancyR >= 0 ? 'pos' : 'neg')}
+        ${kpiTile('Aspettativa media %', fmtPct(k.expectancy), k.expectancy >= 0 ? 'pos' : 'neg')}
         ${kpiTile('R:R medio', k.avgRR !== null ? k.avgRR.toFixed(2) + 'R' : 'n/d', '', k.rrOutliersExcluded > 0 ? `${k.rrOutliersExcluded} valore/i anomalo/i escluso/i` : '')}
+      </div>
+      <div class="grid grid-4">
         ${kpiTile('MAE medio', fmtPct(k.avgMAE))}
         ${kpiTile('MFE medio', fmtPct(k.avgMFE))}
         ${kpiTile('Drawdown massimo', fmtPct(k.maxDrawdown), 'neg')}
-        ${kpiTile('Serie vincenti massima', k.bestWinStreak, 'pos')}
-        ${kpiTile('Serie perdenti massima', k.worstLossStreak, 'neg')}
         ${kpiTile('Pips totali', fmtNum(pips.totalPips, 1))}
-        ${kpiTile('Trade in BE', k.breakevens)}
       </div>
 
       <div class="card">
@@ -97,27 +114,51 @@
 
       <div class="grid grid-2">
         <div class="card">
-          <div class="card-title">📅 Performance per giorno</div>
-          <div class="card-subtitle">Win rate per giorno della settimana</div>
-          <div class="chart-wrap"><canvas id="chart-weekday"></canvas></div>
+          <div class="card-title">📆 R Totali per mese</div>
+          <div class="card-subtitle">Somma dei multipli di R realizzati, mese per mese</div>
+          ${rStats.n ? '<div class="chart-wrap"><canvas id="chart-monthly-r"></canvas></div>' : '<p class="kpi-sub">Colonna "Risultato in R" non presente nel journal caricato.</p>'}
         </div>
         <div class="card">
-          <div class="card-title">🕐 Performance per orario</div>
-          <div class="card-subtitle">Win rate per fascia oraria di ingresso</div>
-          <div class="chart-wrap"><canvas id="chart-hour"></canvas></div>
+          <div class="card-title">🎯 Distribuzione risultati</div>
+          <div class="chart-wrap"><canvas id="chart-donut"></canvas></div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📅 Giorni della settimana — dettaglio</div>
+        <div class="card-subtitle">Trade, Target/Parziale/BE/SL, R Totali ed Expectancy per giorno</div>
+        <div class="table-scroll"><table>
+          <thead><tr><th>Giorno</th><th>Trade</th><th>Target</th><th>Parziale</th><th>BE</th><th>SL</th><th>Win rate</th><th>R Totali</th><th>Expectancy</th></tr></thead>
+          <tbody>${weekdayRows.map((r) => `<tr>
+            <td>${r.labelFull}</td><td>${r.n}</td><td>${r.target}</td><td>${r.parziale}</td><td>${r.be}</td><td>${r.sl}</td>
+            <td><span class="pill ${r.winRate >= 50 ? 'pill-green' : 'pill-red'}">${r.n ? r.winRate.toFixed(0) + '%' : '—'}</span></td>
+            <td>${r.totalR !== null ? `${r.totalR >= 0 ? '+' : ''}${r.totalR.toFixed(2)}R` : '—'}</td>
+            <td>${r.expectancyR !== null ? `${r.expectancyR >= 0 ? '+' : ''}${r.expectancyR.toFixed(2)}R` : '—'}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+        <div class="chart-wrap" style="margin-top:14px;"><canvas id="chart-weekday"></canvas></div>
       </div>
 
       <div class="grid grid-2">
         <div class="card">
-          <div class="card-title">🎯 Take Profit / Stop Loss / Breakeven</div>
-          <div class="chart-wrap"><canvas id="chart-donut"></canvas></div>
+          <div class="card-title">🌍 Sessioni di mercato</div>
+          <div class="card-subtitle">Confronto Asia / Londra / New York (o le sessioni presenti nel tuo journal)</div>
+          ${sessionRows.length ? `<div class="chart-wrap"><canvas id="chart-session"></canvas></div>
+            <ul class="simple-list" style="margin-top:10px;">${sessionRows.map((r) => `<li><span class="pill pill-muted">${r.n} trade</span> ${esc(r.key)} · ${r.winRate.toFixed(0)}% win rate${r.expectancyR !== null ? ` · ${r.expectancyR >= 0 ? '+' : ''}${r.expectancyR.toFixed(2)}R expectancy` : ''}</li>`).join('')}</ul>`
+            : '<p class="kpi-sub">Nessuna colonna "Sessione" trovata nel journal.</p>'}
         </div>
         <div class="card">
           <div class="card-title">↕️ Long vs Short</div>
-          <div class="card-subtitle">Win rate per direzione</div>
+          <div class="card-subtitle">Win rate ed Expectancy per direzione</div>
           <div class="chart-wrap"><canvas id="chart-direction"></canvas></div>
+          <ul class="simple-list" style="margin-top:10px;">${dirRowsD.map((r) => `<li><span class="pill pill-muted">${r.n} trade</span> ${r.key === 'long' ? 'Long' : 'Short'} · ${r.winRate.toFixed(0)}% win rate${r.expectancyR !== null ? ` · ${r.expectancyR >= 0 ? '+' : ''}${r.expectancyR.toFixed(2)}R expectancy` : ''}</li>`).join('')}</ul>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🕐 Performance per orario</div>
+        <div class="card-subtitle">Win rate per fascia oraria di ingresso — individua le fasce con Expectancy positiva o negativa</div>
+        <div class="chart-wrap"><canvas id="chart-hour"></canvas></div>
       </div>
 
       <div class="card">
@@ -138,11 +179,29 @@
     CH.weekdayBar('chart-weekday', M.byWeekday(trades));
     const hourRows = M.byHour(trades);
     CH.hourBar('chart-hour', hourRows.length ? hourRows : [{ label: 'n/d', winRate: 0, n: 0 }]);
-    CH.winLossDonut('chart-donut', k);
+    if (hasDetailed) CH.outcomeDonut4('chart-donut', oc);
+    else CH.winLossDonut('chart-donut', k);
     const dirRows = M.byDirection(trades);
     CH.directionBar('chart-direction', dirRows.length ? dirRows : [{ key: 'long', winRate: 0 }, { key: 'short', winRate: 0 }]);
     CH.maeMfeBar('chart-maemfe', k.avgMAE, k.avgMFE);
     CH.monthlyComparison('chart-monthly', monthlyRows(trades));
+    if (rStats.n) CH.monthlyRBar('chart-monthly-r', monthlyRRows(trades));
+    if (sessionRows.length) CH.categoryBar('chart-session', sessionRows, { valueKey: 'winRate', isPercent: true, horizontal: true });
+  }
+
+  function monthlyRRows(trades) {
+    const byMonth = new Map();
+    for (const t of M.sortByDateTime(trades)) {
+      if (!t.date) continue;
+      const key = t.date.slice(0, 7);
+      if (!byMonth.has(key)) byMonth.set(key, []);
+      byMonth.get(key).push(t);
+    }
+    return [...byMonth.entries()].map(([key, list]) => {
+      const r = M.rMultipleStats(list);
+      const [y, m] = key.split('-');
+      return { label: `${CAL.MONTHS_IT[parseInt(m, 10) - 1].slice(0, 3)} ${y}`, totalR: r.totalR || 0 };
+    });
   }
 
   function maeMfeEfficiencyNote(trades) {
@@ -274,11 +333,21 @@
     const pips = M.pipsStats(trades);
     const hourly = I.hourlyNarrative(trades);
     const playbook = I.confluencePlaybook(trades);
+    const ideal = M.idealProfile(trades, 5, state.setupLookup);
+    const setupRows = M.bySetupDetailed(trades, state.setupLookup);
+    const causesSL = M.qualitativeCauses(trades, 'sl');
+    const causesBE = M.qualitativeCauses(trades, 'be');
 
     el.innerHTML = `
       <div class="card">
         <div class="card-title">🧭 Interpretazione generale</div>
         <p style="line-height:1.6;font-size:14px;">${esc(general)}</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🏆 Profilo del trade statisticamente ideale</div>
+        <div class="card-subtitle">Combinazione migliore tra le categorie con almeno ${ideal.minN} trade</div>
+        ${idealProfileHtml(ideal)}
       </div>
 
       <div class="card">
@@ -367,9 +436,72 @@
           ${pips.bySymbolPips.length ? `<ul class="simple-list">${pips.bySymbolPips.map((s) => `<li>${esc(s.symbol)}: ${fmtNum(s.totalPips, 1)} pips (${s.n} trade)</li>`).join('')}</ul>` : ''}
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-title">🧱 Performance per Setup</div>
+        ${setupRows.length ? `<div class="table-scroll"><table>
+          <thead><tr><th>Setup</th><th>Descrizione</th><th>Trade</th><th>Win rate</th><th>Profit factor</th><th>Expectancy</th></tr></thead>
+          <tbody>${setupRows.map((r) => {
+            const pf = r.losses > 0 ? (r.wins / r.losses) : (r.wins > 0 ? Infinity : 0);
+            return `<tr>
+              <td>${esc(r.key)}</td><td style="white-space:normal;max-width:280px;">${esc(r.description || '—')}</td><td>${r.n}</td>
+              <td><span class="pill ${r.winRate >= 50 ? 'pill-green' : 'pill-red'}">${r.winRate.toFixed(0)}%</span></td>
+              <td>${Number.isFinite(pf) ? pf.toFixed(2) : '∞'}</td>
+              <td>${r.expectancyR !== null ? `${r.expectancyR >= 0 ? '+' : ''}${r.expectancyR.toFixed(2)}R` : fmtPct(r.avgPnL)}</td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table></div>` : '<p class="kpi-sub">Nessuna colonna "Setup" trovata nel journal.</p>'}
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="card-title" style="color:var(--red);">🛑 Cause principali di Stop Loss</div>
+          ${qualitativeCausesHtml(causesSL, 'bullet-con')}
+        </div>
+        <div class="card">
+          <div class="card-title" style="color:var(--amber);">⚖️ Motivazioni principali di Breakeven</div>
+          ${qualitativeCausesHtml(causesBE, 'bullet-watch')}
+        </div>
+      </div>
     `;
 
     if (confl.all.length) CH.confluenceBar('chart-confluence', confl.all);
+  }
+
+  function idealProfileHtml(ideal) {
+    const parts = [
+      ['📅 Giorno migliore', ideal.day],
+      ['🌍 Sessione migliore', ideal.session],
+      ['🕐 Fascia oraria top', ideal.hour],
+      ['↕️ Direzione top', ideal.direction],
+      ['🧱 Setup migliore', ideal.setup]
+    ];
+    const available = parts.filter(([, v]) => v);
+    if (!available.length) return `<p class="kpi-sub">Servono almeno ${ideal.minN} trade per categoria per calcolare un profilo affidabile: continua a registrare i tuoi trade.</p>`;
+    return `<div class="grid grid-3">
+      ${parts.map(([label, v]) => v ? `
+        <div class="kpi-tile">
+          <div class="kpi-label">${esc(label)}</div>
+          <div class="kpi-value pos" style="font-size:16px;">${esc(v.label)}</div>
+          <div class="kpi-sub">${v.winRate.toFixed(0)}% win rate · ${v.n} trade${v.expectancyR !== null ? ` · ${v.expectancyR >= 0 ? '+' : ''}${v.expectancyR.toFixed(2)}R` : ''}</div>
+        </div>
+      ` : `<div class="kpi-tile"><div class="kpi-label">${esc(label)}</div><div class="kpi-sub">Dati insufficienti (min. ${ideal.minN} trade)</div></div>`).join('')}
+    </div>`;
+  }
+
+  function qualitativeCausesHtml(c, bulletClass) {
+    if (!c.n) return '<p class="kpi-sub">Nessun trade in questa categoria.</p>';
+    const parts = [`<p class="kpi-sub" style="margin-bottom:10px;">Basato su ${c.n} trade.</p>`];
+    if (c.mistakes.length) {
+      parts.push(`<h4 style="margin:0 0 6px;font-size:12.5px;color:var(--text-muted);">Errori taggati più frequenti</h4>`);
+      parts.push(`<ul class="simple-list">${c.mistakes.map((m) => `<li class="${bulletClass}">${esc(m.tag)} · ${m.n}×</li>`).join('')}</ul>`);
+    }
+    if (c.words.length) {
+      parts.push(`<h4 style="margin:10px 0 6px;font-size:12.5px;color:var(--text-muted);">Parole ricorrenti nelle note</h4>`);
+      parts.push(`<ul class="simple-list">${c.words.map((w) => `<li class="${bulletClass}">"${esc(w.word)}" · ${w.count}×</li>`).join('')}</ul>`);
+    }
+    if (!c.mistakes.length && !c.words.length) parts.push('<p class="kpi-sub">Nessun errore o nota ricorrente individuato: aggiungi tag "Errori" o note ai trade per arricchire questa analisi.</p>');
+    return parts.join('');
   }
 
   function recCard(r) {
@@ -550,19 +682,19 @@
 
   async function handleFile(file) {
     try {
-      const { headers, rows } = await P.readFile(file);
-      handleParsed(headers, rows);
+      const { headers, rows, setupLookup } = await P.readFile(file);
+      handleParsed(headers, rows, setupLookup);
     } catch (err) {
       toast(`Errore lettura file: ${err.message}`);
     }
   }
 
-  function handleParsed(headers, rows) {
+  function handleParsed(headers, rows, setupLookup) {
     if (!rows.length) { toast('Il file non contiene righe leggibili.'); return; }
     const sig = DB.headerSignature(headers);
     const savedMapping = DB.getMappingTemplate(sig);
     const mapping = savedMapping || P.guessMapping(headers);
-    state.pendingImport = { headers, rows, mapping, sig };
+    state.pendingImport = { headers, rows, mapping, sig, setupLookup };
     document.getElementById('btn-review-mapping').style.display = 'inline-flex';
     // Zero-click import: if the only required field (Data) was recognized
     // automatically, skip the confirmation dialog entirely and analyze
@@ -613,7 +745,11 @@
     const pending = state.pendingImport;
     if (!pending) return;
     if (!mapping.date) { toast('Devi indicare almeno la colonna Data.'); if (!opts || !opts.closeAfter) openMappingModal(); return; }
-    const normalized = P.normalizeRows(pending.rows, mapping);
+    const normalized = P.normalizeRows(pending.rows, mapping, pending.setupLookup);
+    if (pending.setupLookup) {
+      state.setupLookup = pending.setupLookup;
+      DB.saveSettings({ ...DB.getSettings(), setupLookup: pending.setupLookup });
+    }
     if (!normalized.length) {
       const sample = pending.rows.slice(0, 3).map((r) => r[mapping.date]).filter((v) => v !== '' && v !== undefined);
       const hint = sample.length ? ` Esempio di valore letto nella colonna Data: "${sample[0]}".` : ' La colonna Data risulta vuota nelle prime righe.';

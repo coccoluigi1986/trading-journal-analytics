@@ -29,16 +29,25 @@
     { key: 'mfePips', label: 'MFE (pips)', synonyms: ['mfepips'] },
     { key: 'session', label: 'Sessione', synonyms: ['session', 'sessione', 'fasciaoraria'] },
     { key: 'marketCondition', label: 'Condizione di mercato', synonyms: ['marketcondition', 'condizionemercato', 'condizionidimercato', 'condizionedimercato', 'contesto'] },
-    { key: 'mentalState', label: 'Stato mentale', synonyms: ['mentalstate', 'statomentale', 'emozione', 'psicologia', 'mood'] },
-    { key: 'confluences', label: 'Confluenze / Pro', synonyms: ['confluences', 'confluenze', 'setup', 'conferme', 'confluence', 'pro'] },
+    { key: 'mentalState', label: 'Stato mentale', synonyms: ['mentalstate', 'statomentale', 'emozione', 'emozioni', 'psicologia', 'mood'] },
+    { key: 'confluences', label: 'Confluenze / Pro', synonyms: ['confluences', 'confluenze', 'conferme', 'confluence', 'pro'] },
     { key: 'mistakes', label: 'Errori / Contro', synonyms: ['mistakes', 'errori', 'errore', 'mistake', 'contro'] },
-    { key: 'setupType', label: 'Tipo setup', synonyms: ['setuptype', 'tiposetup'] },
+    { key: 'setupType', label: 'Setup', synonyms: ['setuptype', 'tiposetup', 'setup'] },
     { key: 'executionQuality', label: 'Qualità esecuzione (1-5)', synonyms: ['executionquality', 'qualitaesecuzione', 'votoesecuzione'] },
-    { key: 'notes', label: 'Note', synonyms: ['notes', 'note', 'commento', 'commenti', 'comment'] },
-    { key: 'notesPost', label: 'Note post operazione', synonyms: ['notespost', 'notepostoperazione', 'notapostoperazione', 'postoperazione'] },
+    { key: 'notes', label: 'Note', synonyms: ['notes', 'note', 'notepre', 'commento', 'commenti', 'comment'] },
+    { key: 'notesPost', label: 'Note post operazione', synonyms: ['notespost', 'notepost', 'notepostoperazione', 'notapostoperazione', 'postoperazione'] },
     { key: 'imageUrlPre', label: 'Link screenshot PRE-trade', synonyms: ['screenpre', 'imagepre', 'screenshotpre', 'linkscreenpre'] },
     { key: 'imageUrlPost', label: 'Link screenshot POST-trade', synonyms: ['screenpost', 'imagepost', 'screenshotpost', 'linkscreenpost'] },
-    { key: 'imageUrl', label: 'Link immagine / screenshot', synonyms: ['image', 'immagine', 'screenshot', 'linkimmagine', 'chartlink', 'imageurl'] }
+    { key: 'imageUrl', label: 'Link immagine / screenshot', synonyms: ['image', 'immagine', 'screenshot', 'linkimmagine', 'chartlink', 'imageurl'] },
+    { key: 'resultCurrency', label: 'Risultato in valuta', synonyms: ['risultatovaluta', 'resultcurrency', 'importo'] },
+    { key: 'resultR', label: 'Risultato in R', synonyms: ['risultatoinr', 'resultinr', 'rinr'] },
+    { key: 'tfAligned', label: 'Timeframe allineati', synonyms: ['tfallineati', 'timeframeallineati'] },
+    { key: 'newsFlag', label: 'News', synonyms: ['news'] },
+    { key: 'sentimentPercent', label: 'Sentiment %', synonyms: ['sentiment', 'sentimentpercent'] },
+    { key: 'cotReport', label: 'COT Report', synonyms: ['cotreport', 'cot'] },
+    { key: 'closeTime', label: 'Orario chiusura', synonyms: ['orariochiusura', 'closetime', 'oraChiusura'.toLowerCase()] },
+    { key: 'durationMin', label: 'Durata (min)', synonyms: ['durata', 'durataminuti', 'durationmin', 'duration'] },
+    { key: 'ddCurrent', label: 'Drawdown corrente', synonyms: ['ddcorrente', 'ddcurrent'] }
   ];
 
   function normalizeHeader(h) {
@@ -172,12 +181,35 @@
     return bestScore > 0 ? bestIdx : 0;
   }
 
+  // Journals built as a multi-sheet workbook (trade log + an auto-computed
+  // stats sheet + a setup code → description lookup) name the actual trade
+  // log something like "Dati"; the stats sheet would otherwise be
+  // misread as more trade rows with a completely different column shape.
+  function pickDataSheetName(sheetNames) {
+    const preferred = sheetNames.find((n) => /^dati$|^data$|^trades?$|^journal$/i.test(n.trim()));
+    return preferred || sheetNames[0];
+  }
+
+  function readSetupLookup(wb) {
+    const setupSheetName = wb.SheetNames.find((n) => /^setup$/i.test(n.trim()));
+    if (!setupSheetName) return null;
+    const aoa = XLSX.utils.sheet_to_json(wb.Sheets[setupSheetName], { header: 1, raw: false, defval: '' });
+    const lookup = {};
+    for (const row of aoa) {
+      const code = String(row[0] || '').trim();
+      const desc = String(row[1] || '').trim();
+      if (code && desc && normalizeHeader(code) !== 'setup') lookup[code] = desc;
+    }
+    return Object.keys(lookup).length ? lookup : null;
+  }
+
   function parseWorkbookArrayBuffer(buffer) {
     if (typeof XLSX === 'undefined') {
       throw new Error('Libreria XLSX non caricata: impossibile leggere file Excel.');
     }
     const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const sheet = wb.Sheets[pickDataSheetName(wb.SheetNames)];
+    const setupLookup = readSetupLookup(wb);
     // Two parallel reads of the same sheet, merged cell-by-cell:
     // - raw:true (+ cellDates) gives real JS Date objects for date cells,
     //   which our date parser handles directly and unambiguously.
@@ -189,7 +221,7 @@
     // read and the best representation is picked per cell.
     const aoaRaw = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
     const aoaFmt = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
-    if (!aoaFmt.length) return { headers: [], rows: [] };
+    if (!aoaFmt.length) return { headers: [], rows: [], setupLookup };
     const aoa = aoaFmt.map((fmtRow, r) => fmtRow.map((fmtCell, c) => {
       const rawCell = (aoaRaw[r] || [])[c];
       return rawCell instanceof Date ? rawCell : fmtCell;
@@ -203,7 +235,7 @@
         headers.forEach((h, i) => { obj[h] = r[i] !== undefined && r[i] !== null ? r[i] : ''; });
         return obj;
       });
-    return { headers, rows };
+    return { headers, rows, setupLookup };
   }
 
   function readFile(file) {
@@ -357,13 +389,33 @@
     return undefined;
   }
 
+  function toCurrency(v) {
+    if (v === '' || v === null || v === undefined) return undefined;
+    if (typeof v === 'number') return v;
+    const s = String(v).replace(/[€$£\s]/g, '');
+    return toNumber(s);
+  }
+
+  // The four-way outcome taxonomy ("Target", "Parziale", "Breakeven",
+  // "Stop Loss") used for the Quadro Generale breakdown — richer than the
+  // win/loss/be used for the rest of the app's stats.
+  function toOutcomeDetailed(v) {
+    if (!v) return undefined;
+    const s = String(v).toLowerCase();
+    if (/target|take\s*profit|\btp\b/.test(s)) return 'target';
+    if (/parzial/.test(s)) return 'parziale';
+    if (/breakeven|\bbe\b|pareggio/.test(s)) return 'be';
+    if (/stop|\bsl\b|loss/.test(s)) return 'sl';
+    return undefined;
+  }
+
   function toList(v) {
     if (!v) return [];
     if (Array.isArray(v)) return v.map((s) => String(s).trim()).filter(Boolean);
     return String(v).split(/[;,|\/]/).map((s) => s.trim()).filter(Boolean);
   }
 
-  function normalizeRow(rawRow, mapping, idSeed) {
+  function normalizeRow(rawRow, mapping, idSeed, setupLookup) {
     function get(key) {
       const col = mapping[key];
       if (!col) return undefined;
@@ -376,6 +428,7 @@
     if (get('notesPost')) noteParts.push(`Post: ${String(get('notesPost')).trim()}`);
     const imageUrlPre = get('imageUrlPre') ? String(get('imageUrlPre')).trim() : undefined;
     const imageUrlPost = get('imageUrlPost') ? String(get('imageUrlPost')).trim() : undefined;
+    const setupType = get('setupType') ? String(get('setupType')).trim() : undefined;
     const trade = {
       id: `t_${idSeed}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       date: toDateIso(get('date')),
@@ -383,8 +436,11 @@
       symbol: get('symbol') ? String(get('symbol')).trim() : undefined,
       direction: toDirection(get('direction')),
       outcome: toOutcome(get('outcome'), resultPercent),
+      outcomeDetailed: toOutcomeDetailed(get('outcome')),
       resultPercent,
       resultPips: toNumber(get('resultPips')),
+      resultCurrency: toCurrency(get('resultCurrency')),
+      resultR: toRR(get('resultR')),
       rrPlanned: toRR(get('rrPlanned')),
       rrRealized: toRR(get('rrRealized')),
       maePercent: toNumber(get('maePercent')),
@@ -396,7 +452,15 @@
       mentalState: get('mentalState') ? String(get('mentalState')).trim() : undefined,
       confluences: toList(get('confluences')),
       mistakes: toList(get('mistakes')),
-      setupType: get('setupType') ? String(get('setupType')).trim() : undefined,
+      setupType,
+      setupDescription: setupType && setupLookup ? setupLookup[setupType] : undefined,
+      tfAligned: toNumber(get('tfAligned')),
+      newsFlag: get('newsFlag') ? String(get('newsFlag')).trim() : undefined,
+      sentimentPercent: toNumber(get('sentimentPercent')),
+      cotReport: get('cotReport') ? String(get('cotReport')).trim() : undefined,
+      closeTime: toTime(get('closeTime')),
+      durationMin: toNumber(get('durationMin')),
+      ddCurrent: toNumber(get('ddCurrent')),
       executionQuality: toNumber(get('executionQuality')),
       notes: noteParts.length ? noteParts.join(' — ') : undefined,
       imageUrlPre,
@@ -406,11 +470,11 @@
     return trade;
   }
 
-  function normalizeRows(rows, mapping) {
+  function normalizeRows(rows, mapping, setupLookup) {
     return rows
-      .map((r, i) => normalizeRow(r, mapping, i))
+      .map((r, i) => normalizeRow(r, mapping, i, setupLookup))
       .filter((t) => t.date); // date is the only hard requirement
   }
 
-  return { FIELD_DEFS, normalizeHeader, guessMapping, parseDelimited, parseJson, parseWorkbookArrayBuffer, readFile, normalizeRows, toNumber, toRR, toDateIso };
+  return { FIELD_DEFS, normalizeHeader, guessMapping, parseDelimited, parseJson, parseWorkbookArrayBuffer, readFile, normalizeRows, toNumber, toRR, toDateIso, toCurrency, toOutcomeDetailed };
 });
