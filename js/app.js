@@ -99,9 +99,7 @@
         ${kpiTile('Aspettativa media %', fmtPct(k.expectancy), k.expectancy >= 0 ? 'pos' : 'neg')}
         ${kpiTile('R:R medio', k.avgRR !== null ? k.avgRR.toFixed(2) + 'R' : 'n/d', '', k.rrOutliersExcluded > 0 ? `${k.rrOutliersExcluded} valore/i anomalo/i escluso/i` : '')}
       </div>
-      <div class="grid grid-4">
-        ${kpiTile('MAE medio', fmtPct(k.avgMAE))}
-        ${kpiTile('MFE medio', fmtPct(k.avgMFE))}
+      <div class="grid grid-2">
         ${kpiTile('Drawdown massimo', fmtPct(k.maxDrawdown), 'neg')}
         ${kpiTile('Pips totali', fmtNum(pips.totalPips, 1))}
       </div>
@@ -162,13 +160,6 @@
       </div>
 
       <div class="card">
-        <div class="card-title">🌊 MAE / MFE medi</div>
-        <div class="card-subtitle">Escursione avversa e favorevole media prima del risultato finale del trade</div>
-        <div class="chart-wrap"><canvas id="chart-maemfe"></canvas></div>
-        ${maeMfeEfficiencyNote(trades)}
-      </div>
-
-      <div class="card">
         <div class="card-title">📆 Confronto mensile</div>
         <div class="card-subtitle">P&amp;L e Win Rate mese per mese</div>
         <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
@@ -183,7 +174,6 @@
     else CH.winLossDonut('chart-donut', k);
     const dirRows = M.byDirection(trades);
     CH.directionBar('chart-direction', dirRows.length ? dirRows : [{ key: 'long', winRate: 0 }, { key: 'short', winRate: 0 }]);
-    CH.maeMfeBar('chart-maemfe', k.avgMAE, k.avgMFE);
     CH.monthlyComparison('chart-monthly', monthlyRows(trades));
     if (rStats.n) CH.monthlyRBar('chart-monthly-r', monthlyRRows(trades));
     if (sessionRows.length) CH.categoryBar('chart-session', sessionRows, { valueKey: 'winRate', isPercent: true, horizontal: true });
@@ -202,12 +192,6 @@
       const [y, m] = key.split('-');
       return { label: `${CAL.MONTHS_IT[parseInt(m, 10) - 1].slice(0, 3)} ${y}`, totalR: r.totalR || 0 };
     });
-  }
-
-  function maeMfeEfficiencyNote(trades) {
-    const eff = M.maeMfeEfficiency(trades);
-    if (!eff) return `<p class="kpi-sub" style="margin-top:10px;">Dati MAE/MFE non presenti nel journal caricato.</p>`;
-    return `<p class="kpi-sub" style="margin-top:10px;">Efficienza di cattura del movimento: in media catturi il ${eff.avgCaptureRatio.toFixed(0)}% del massimo movimento favorevole (MFE) su ${eff.n} trade con dati disponibili.</p>`;
   }
 
   function monthlyRows(trades) {
@@ -773,8 +757,8 @@
   }
 
   function downloadTemplate() {
-    const headers = ['Data', 'Ora', 'Simbolo', 'Direzione', 'Esito', 'Risultato %', 'Pips', 'RR Pianificato', 'RR Realizzato', 'MAE %', 'MFE %', 'Sessione', 'Condizione di mercato', 'Stato mentale', 'Confluenze', 'Errori', 'Tipo setup', 'Qualità esecuzione', 'Note', 'Note post operazione', 'Link screenshot PRE-trade', 'Link screenshot POST-trade'];
-    const example = ['06/08/2026', '18:00', 'XAUUSD', 'Long', 'Win', '3,7', '37', '3', '3.7', '-0,3', '4,0', 'Sera', 'Trend', 'Disciplinato', 'Order block, Liquidity sweep', '', 'Continuazione', '4', 'Ottima entrata dopo retest del livello', 'Gestione impeccabile, uscita a target pieno', 'https://...pre.png', 'https://...post.png'];
+    const headers = ['Data', 'Ora', 'Simbolo', 'Direzione', 'Esito', 'Risultato %', 'Pips', 'RR Pianificato', 'RR Realizzato', 'Sessione', 'Condizione di mercato', 'Stato mentale', 'Confluenze', 'Errori', 'Tipo setup', 'Qualità esecuzione', 'Note', 'Note post operazione', 'Link screenshot PRE-trade', 'Link screenshot POST-trade'];
+    const example = ['06/08/2026', '18:00', 'XAUUSD', 'Long', 'Win', '3,7', '37', '3', '3.7', 'Sera', 'Trend', 'Disciplinato', 'Order block, Liquidity sweep', '', 'Continuazione', '4', 'Ottima entrata dopo retest del livello', 'Gestione impeccabile, uscita a target pieno', 'https://...pre.png', 'https://...post.png'];
     const csv = `${headers.join(';')}\n${example.join(';')}\n`;
     downloadTextFile('template-trading-journal.csv', csv);
   }
