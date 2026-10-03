@@ -533,13 +533,15 @@
 
   function tradeRow(t) {
     const outcomeCls = M.isWin(t) ? 'pill-green' : M.isLoss(t) ? 'pill-red' : 'pill-amber';
-    const outcomeLabel = M.isWin(t) ? 'Win' : M.isLoss(t) ? 'Loss' : 'BE';
+    const detailedLabels = { target: 'Target', parziale: 'Parziale', be: 'BE', sl: 'SL' };
+    const outcomeLabel = detailedLabels[t.outcomeDetailed] || (M.isWin(t) ? 'Win' : M.isLoss(t) ? 'Loss' : 'BE');
+    const rr = t.rrRealized ?? t.rrPlanned;
     return `<tr>
       <td>${t.date || ''}</td><td>${t.time || ''}</td><td>${esc(t.symbol || '')}</td>
       <td>${t.direction ? esc(t.direction) : ''}</td>
       <td><span class="pill ${outcomeCls}">${outcomeLabel}</span></td>
       <td>${fmtPct(M.pnlOf(t))}</td>
-      <td>${t.rrRealized ?? t.rrPlanned ?? '—'}</td>
+      <td>${typeof rr === 'number' && Number.isFinite(rr) ? `${rr.toFixed(2)}R` : '—'}</td>
       <td>${(t.confluences || []).map((c) => `<span class="pill pill-muted">${esc(c)}</span>`).join(' ')}</td>
       <td style="max-width:220px;white-space:normal;">${esc(t.notes || '')} ${t.imageUrlPre ? `<a href="#" data-img-url="${esc(t.imageUrlPre)}" title="Screenshot pre-trade">🖼️PRE</a>` : ''} ${t.imageUrlPost ? `<a href="#" data-img-url="${esc(t.imageUrlPost)}" title="Screenshot post-trade">🖼️POST</a>` : ''} ${!t.imageUrlPre && !t.imageUrlPost && t.imageUrl ? `<a href="#" data-img-url="${esc(t.imageUrl)}">🖼️</a>` : ''}</td>
       <td><button class="btn btn-sm" data-edit-id="${t.id}">✎</button> <button class="btn btn-sm btn-danger" data-del-id="${t.id}">🗑</button></td>
